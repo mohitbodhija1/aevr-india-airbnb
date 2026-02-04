@@ -1,0 +1,209 @@
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--header-height);
+    background-color: var(--color-white);
+    border-bottom: 1px solid var(--color-gray-100);
+    z-index: 1000;
+    padding: 0 var(--container-padding);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Logo Section */
+.logoContainer {
+    flex: 1 0 140px;
+    display: flex;
+    align-items: center;
+}
+
+.logoText {
+    color: var(--color-primary);
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-2xl);
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+/* Search Bar (Middle) */
+.searchContainer {
+    flex: 0 1 auto;
+    min-width: 348px;
+    text-align: center;
+}
+
+.searchBar {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-gray-100);
+    border-radius: var(--radius-full);
+    padding: 0 8px;
+    /* Inner padding for search button */
+    height: 48px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1);
+    cursor: pointer;
+}
+
+.searchBar:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.searchExpanded {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-full);
+    padding: 0 8px;
+    height: 48px;
+    box-shadow: var(--shadow-md);
+    background-color: var(--color-gray-50);
+    width: 100%;
+}
+
+.searchButton {
+    padding: 0 16px;
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    border-right: 1px solid var(--color-gray-100);
+    line-height: 18px;
+    display: flex;
+    align-items: center;
+}
+
+.searchButton:last-of-type {
+    border-right: none;
+    color: var(--text-secondary);
+}
+
+.searchIconContainer {
+    background-color: var(--color-primary);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-white);
+    margin-left: 7px;
+    border: none;
+    cursor: pointer;
+}
+
+/* User Menu (Right) */
+.userMenu {
+    flex: 1 0 140px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--spacing-2);
+}
+
+.hostLink {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    padding: 10px 14px;
+    /* Slightly reduced padding to match design */
+    border-radius: var(--radius-full);
+    transition: background-color 0.1s;
+}
+
+.hostLink:hover {
+    background-color: var(--color-gray-50);
+}
+
+.globeButton {
+    padding: 12px;
+    border-radius: 50%;
+    transition: background-color 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.globeButton:hover {
+    background-color: var(--color-gray-50);
+}
+
+.profileMenu {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: 5px 5px 5px 12px;
+    border: 1px solid var(--color-gray-100);
+    border-radius: 21px;
+    /* Specific Airbnb radius */
+    margin-left: var(--spacing-1);
+    transition: box-shadow 0.2s;
+    cursor: pointer;
+}
+
+.profileMenu:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.avatar {
+    background-color: var(--color-gray-200);
+    color: var(--color-white);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+@media (max-width: 744px) {
+    .header {
+        height: var(--header-height);
+        padding: 0 24px;
+        gap: 12px;
+    }
+
+    .searchContainer {
+        min-width: unset;
+        flex: 1;
+    }
+
+    .searchBar,
+    .searchExpanded {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .userMenu,
+    .globeButton,
+    .hostLink {
+        display: none;
+        /* Show only basic header on mobile for now */
+    }
+
+    /* On mobile, show only the search icon and maybe one text input */
+    .searchButton:not(:first-child) {
+        display: none;
+    }
+
+    .searchButton {
+        border: none;
+        flex: 1;
+        justify-content: flex-start;
+    }
+
+    .logoContainer {
+        flex: 0;
+        display: none;
+        /* Often hidden on search focus mobile, but keep simple */
+    }
+
+    /* Show logo only if not searching? keeping simple */
+    .logoContainer {
+        display: flex;
+    }
+}

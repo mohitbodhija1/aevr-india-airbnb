@@ -1,0 +1,191 @@
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    cursor: pointer;
+    position: relative;
+    group: pointer;
+    /* Concept for grouping hover effects */
+}
+
+/* Image Carousel */
+.imageContainer {
+    position: relative;
+    aspect-ratio: 20 / 19;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background-color: var(--color-gray-100);
+}
+
+.image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.2s;
+}
+
+/* Navigation Arrows */
+.navButton {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    /* Slight subtle border */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.1s;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navButton:hover {
+    background-color: #fff;
+    transform: translateY(-50%) scale(1.04);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.prevButton {
+    left: 8px;
+}
+
+.nextButton {
+    right: 8px;
+}
+
+.card:hover .navButton {
+    opacity: 1;
+}
+
+/* Dots Indicator */
+.dotsContainer {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 2;
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.6);
+    transition: background-color 0.2s;
+}
+
+.dot.active {
+    background-color: #fff;
+}
+
+/* Favorite Heart */
+.heartButton {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    color: rgba(0, 0, 0, 0.5);
+    /* Semi-transparent outline */
+    transition: transform 0.1s;
+}
+
+.heartButton:active {
+    transform: scale(0.9);
+}
+
+.heartButton svg {
+    fill: rgba(0, 0, 0, 0.5);
+    stroke: #fff;
+    stroke-width: 2px;
+    overflow: visible;
+    /* To allow stroke to sit outside */
+}
+
+.heartButton.favorited svg {
+    fill: var(--color-primary);
+    stroke: var(--color-primary);
+}
+
+/* Info Section */
+.info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.headerRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.title {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    font-size: var(--font-size-md);
+}
+
+.rating {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-md);
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: var(--font-size-md);
+}
+
+.dates {
+    color: var(--text-secondary);
+    font-size: var(--font-size-md);
+}
+
+.priceRow {
+    margin-top: 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.price {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    font-size: var(--font-size-md);
+}
+
+.period {
+    color: var(--text-primary);
+    font-size: var(--font-size-md);
+}
+
+.guestFavorite {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background-color: rgba(255, 255, 255, 0.95);
+    padding: 4px 8px;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    z-index: 2;
+    box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 744px) {
+    .navButton {
+        opacity: 1;
+        /* Always show arrows on touch devices if needed, or rely on swipe (not implemented yet) */
+        width: 28px;
+        height: 28px;
+    }
+}
