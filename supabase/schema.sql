@@ -50,6 +50,7 @@ create table if not exists public.listings (
     review_count integer not null default 0,
     is_guest_favorite boolean not null default false,
     availability_summary text,
+    map_link text,
     city text not null,
     country text not null,
     lat numeric(9, 6) not null,
@@ -62,6 +63,9 @@ create table if not exists public.listings (
     created_at timestamptz not null default timezone('utc', now()),
     updated_at timestamptz not null default timezone('utc', now())
 );
+
+-- Backfill columns for environments where listings existed before these fields were introduced.
+alter table public.listings add column if not exists map_link text;
 
 create table if not exists public.listing_images (
     id uuid primary key default gen_random_uuid(),
@@ -156,6 +160,11 @@ create table if not exists public.payout_accounts (
     updated_at timestamptz not null default timezone('utc', now()),
     constraint payout_accounts_unique_provider unique (host_id, provider)
 );
+
+insert into storage.buckets (id, name, public)
+values ('listing-images', 'listing-images', true)
+on conflict (id) do update
+set public = excluded.public;
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -259,48 +268,57 @@ alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 alter table public.payout_accounts enable row level security;
 
+drop policy if exists "Public read active profiles" on public.profiles;
 create policy "Public read active profiles"
 on public.profiles
 for select
 using (true);
 
+drop policy if exists "Users manage own profile" on public.profiles;
 create policy "Users manage own profile"
 on public.profiles
 for all
 using (auth.uid() = id)
 with check (auth.uid() = id);
 
+drop policy if exists "Public read active categories" on public.categories;
 create policy "Public read active categories"
 on public.categories
 for select
 using (is_active = true);
 
+drop policy if exists "Public read active amenities" on public.amenities;
 create policy "Public read active amenities"
 on public.amenities
 for select
 using (is_active = true);
 
+drop policy if exists "Public read active listings" on public.listings;
 create policy "Public read active listings"
 on public.listings
 for select
 using (is_active = true);
 
+drop policy if exists "Hosts insert own listings" on public.listings;
 create policy "Hosts insert own listings"
 on public.listings
 for insert
 with check (auth.uid() = host_id);
 
+drop policy if exists "Hosts update own listings" on public.listings;
 create policy "Hosts update own listings"
 on public.listings
 for update
 using (auth.uid() = host_id)
 with check (auth.uid() = host_id);
 
+drop policy if exists "Hosts delete own listings" on public.listings;
 create policy "Hosts delete own listings"
 on public.listings
 for delete
 using (auth.uid() = host_id);
 
+drop policy if exists "Public read listing images for active listings" on public.listing_images;
 create policy "Public read listing images for active listings"
 on public.listing_images
 for select
@@ -313,6 +331,7 @@ using (
     )
 );
 
+drop policy if exists "Hosts manage own listing images" on public.listing_images;
 create policy "Hosts manage own listing images"
 on public.listing_images
 for all
@@ -333,6 +352,7 @@ with check (
     )
 );
 
+drop policy if exists "Public read listing amenities for active listings" on public.listing_amenities;
 create policy "Public read listing amenities for active listings"
 on public.listing_amenities
 for select
@@ -345,6 +365,7 @@ using (
     )
 );
 
+drop policy if exists "Hosts manage own listing amenities" on public.listing_amenities;
 create policy "Hosts manage own listing amenities"
 on public.listing_amenities
 for all
@@ -365,6 +386,7 @@ with check (
     )
 );
 
+drop policy if exists "Public read availability blocks for active listings" on public.availability_blocks;
 create policy "Public read availability blocks for active listings"
 on public.availability_blocks
 for select
@@ -377,6 +399,7 @@ using (
     )
 );
 
+drop policy if exists "Hosts manage own availability blocks" on public.availability_blocks;
 create policy "Hosts manage own availability blocks"
 on public.availability_blocks
 for all
@@ -397,6 +420,7 @@ with check (
     )
 );
 
+drop policy if exists "Guests read own bookings and hosts read related bookings" on public.bookings;
 create policy "Guests read own bookings and hosts read related bookings"
 on public.bookings
 for select
@@ -410,17 +434,20 @@ using (
     )
 );
 
+drop policy if exists "Guests create own bookings" on public.bookings;
 create policy "Guests create own bookings"
 on public.bookings
 for insert
 with check (auth.uid() = guest_id);
 
+drop policy if exists "Booking owners update own bookings" on public.bookings;
 create policy "Booking owners update own bookings"
 on public.bookings
 for update
 using (auth.uid() = guest_id)
 with check (auth.uid() = guest_id);
 
+drop policy if exists "Public read reviews for active listings" on public.reviews;
 create policy "Public read reviews for active listings"
 on public.reviews
 for select
@@ -433,34 +460,40 @@ using (
     )
 );
 
+drop policy if exists "Guests write own reviews" on public.reviews;
 create policy "Guests write own reviews"
 on public.reviews
 for insert
 with check (auth.uid() = guest_id);
 
+drop policy if exists "Guests manage own reviews" on public.reviews;
 create policy "Guests manage own reviews"
 on public.reviews
 for update
 using (auth.uid() = guest_id)
 with check (auth.uid() = guest_id);
 
+drop policy if exists "Users manage own favorites" on public.favorites;
 create policy "Users manage own favorites"
 on public.favorites
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+drop policy if exists "Conversation participants read conversations" on public.conversations;
 create policy "Conversation participants read conversations"
 on public.conversations
 for select
 using (auth.uid() = guest_id or auth.uid() = host_id);
 
+drop policy if exists "Conversation participants manage conversations" on public.conversations;
 create policy "Conversation participants manage conversations"
 on public.conversations
 for all
 using (auth.uid() = guest_id or auth.uid() = host_id)
 with check (auth.uid() = guest_id or auth.uid() = host_id);
 
+drop policy if exists "Message participants read messages" on public.messages;
 create policy "Message participants read messages"
 on public.messages
 for select
@@ -473,6 +506,7 @@ using (
     )
 );
 
+drop policy if exists "Message participants write messages" on public.messages;
 create policy "Message participants write messages"
 on public.messages
 for insert
@@ -486,11 +520,37 @@ with check (
     and auth.uid() = sender_id
 );
 
+drop policy if exists "Hosts manage payout accounts" on public.payout_accounts;
 create policy "Hosts manage payout accounts"
 on public.payout_accounts
 for all
 using (auth.uid() = host_id)
 with check (auth.uid() = host_id);
+
+drop policy if exists "Public read listing images" on storage.objects;
+create policy "Public read listing images"
+on storage.objects
+for select
+using (bucket_id = 'listing-images');
+
+drop policy if exists "Authenticated upload listing images" on storage.objects;
+create policy "Authenticated upload listing images"
+on storage.objects
+for insert
+with check (bucket_id = 'listing-images' and auth.role() = 'authenticated');
+
+drop policy if exists "Authenticated update listing images" on storage.objects;
+create policy "Authenticated update listing images"
+on storage.objects
+for update
+using (bucket_id = 'listing-images' and auth.role() = 'authenticated')
+with check (bucket_id = 'listing-images' and auth.role() = 'authenticated');
+
+drop policy if exists "Authenticated delete listing images" on storage.objects;
+create policy "Authenticated delete listing images"
+on storage.objects
+for delete
+using (bucket_id = 'listing-images' and auth.role() = 'authenticated');
 
 create index if not exists listings_host_id_idx on public.listings (host_id);
 create index if not exists listings_category_id_idx on public.listings (category_id);
@@ -502,10 +562,21 @@ create index if not exists bookings_guest_id_idx on public.bookings (guest_id);
 create index if not exists reviews_listing_id_idx on public.reviews (listing_id);
 create index if not exists favorites_user_id_idx on public.favorites (user_id);
 
-alter table public.bookings
-    add constraint bookings_no_overlap
-    exclude using gist (
-        listing_id with =,
-        daterange(check_in, check_out, '[)') with &&
-    )
-    where (status in ('pending', 'confirmed'));
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'bookings_no_overlap'
+          and conrelid = 'public.bookings'::regclass
+    ) then
+        alter table public.bookings
+            add constraint bookings_no_overlap
+            exclude using gist (
+                listing_id with =,
+                daterange(check_in, check_out, '[)') with &&
+            )
+            where (status in ('pending', 'confirmed'));
+    end if;
+end
+$$;

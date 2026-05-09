@@ -8,8 +8,9 @@ import type { Listing } from '../types';
 
 export const Home = () => {
     const [searchParams, setSearchParams] = useSearchParams();
-    const categoryParam = searchParams.get('category') || 'icons';
+    const categoryParam = searchParams.get('category');
     const searchParam = searchParams.get('q') || '';
+    const categoryFilter = categoryParam && categoryParam !== 'icons' ? categoryParam : undefined;
 
     const [listings, setListings] = useState<Listing[]>([]);
     const [loading, setLoading] = useState(true);
@@ -25,14 +26,14 @@ export const Home = () => {
         const loadListings = async () => {
             setLoading(true);
             try {
-                const data = await api.fetchListings(categoryParam, searchParam);
+                const data = await api.fetchListings(categoryFilter, searchParam);
                 setListings(data);
             } finally {
                 setLoading(false);
             }
         };
         loadListings();
-    }, [categoryParam, searchParam]);
+    }, [categoryFilter, searchParam]);
 
     return (
         <>

@@ -153,6 +153,12 @@
     color: var(--text-secondary);
 }
 
+.mapLink {
+    width: fit-content;
+    color: var(--color-primary);
+    font-weight: var(--font-weight-semibold);
+}
+
 .price {
     font-weight: var(--font-weight-semibold);
     text-align: right;

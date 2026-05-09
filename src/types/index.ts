@@ -45,6 +45,7 @@ export interface Listing {
     baths?: number;
     availabilitySummary?: string;
     hostId?: string;
+    mapLink?: string;
 }
 
 export interface Category {
@@ -92,6 +93,7 @@ export interface CreateListingInput {
     country: string;
     lat: number;
     lng: number;
+    mapLink?: string;
     guestCountMax: number;
     bedrooms: number;
     beds: number;

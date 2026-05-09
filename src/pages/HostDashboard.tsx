@@ -53,6 +53,12 @@ const ListingSummaryCard = ({ listing }: { listing: Listing }) => (
                 <span><Bath size={14} /> {listing.baths ?? 1} baths</span>
             </div>
 
+            {listing.mapLink && (
+                <a href={listing.mapLink} target="_blank" rel="noreferrer" className={styles.mapLink}>
+                    Open map link
+                </a>
+            )}
+
             <p className={styles.description}>{listing.description}</p>
 
             <div className={styles.tagRow}>

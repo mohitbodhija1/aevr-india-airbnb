@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import styles from './HostNewProperty.module.css';
 import { api } from '../services/api';
 import { authService } from '../services/auth';
-import type { Category } from '../types';
 import { hasSupabaseConfig } from '../services/supabase';
+import { uploadListingImages } from '../services/storage';
+import type { Category } from '../types';
 
 type FormState = {
     title: string;
@@ -14,14 +15,12 @@ type FormState = {
     categorySlug: string;
     city: string;
     country: string;
-    lat: string;
-    lng: string;
+    mapLink: string;
     guestCountMax: string;
     bedrooms: string;
     beds: string;
     baths: string;
     availabilitySummary: string;
-    imageUrls: string;
     amenityLabels: string;
 };
 
@@ -32,15 +31,13 @@ const initialState: FormState = {
     currency: 'INR',
     categorySlug: 'cabins',
     city: '',
-    country: '',
-    lat: '',
-    lng: '',
+    country: 'India',
+    mapLink: '',
     guestCountMax: '2',
     bedrooms: '1',
     beds: '1',
     baths: '1',
     availabilitySummary: 'Flexible dates',
-    imageUrls: '',
     amenityLabels: 'Wifi,Kitchen',
 };
 
@@ -50,6 +47,8 @@ export const HostNewProperty = () => {
     const [saving, setSaving] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
     const [form, setForm] = useState<FormState>(initialState);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [previewUrls, setPreviewUrls] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -77,8 +76,23 @@ export const HostNewProperty = () => {
         load();
     }, [navigate]);
 
+    useEffect(() => {
+        const urls = selectedFiles.map((file) => URL.createObjectURL(file));
+        setPreviewUrls(urls);
+
+        return () => {
+            urls.forEach((url) => URL.revokeObjectURL(url));
+        };
+    }, [selectedFiles]);
+
     const updateField = (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         setForm((current) => ({ ...current, [field]: event.target.value }));
+    };
+
+    const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+        setError(null);
+        const files = Array.from(event.target.files ?? []);
+        setSelectedFiles(files);
     };
 
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -93,6 +107,15 @@ export const HostNewProperty = () => {
                 return;
             }
 
+            if (selectedFiles.length === 0) {
+                throw new Error('Upload at least one property image.');
+            }
+
+            const imageUrls = await uploadListingImages(session.user.id, selectedFiles);
+            if (imageUrls.length === 0) {
+                throw new Error('Could not upload images. Make sure the `listing-images` storage bucket exists.');
+            }
+
             await api.createListing(session.user.id, {
                 title: form.title,
                 description: form.description,
@@ -101,14 +124,15 @@ export const HostNewProperty = () => {
                 categorySlug: form.categorySlug,
                 city: form.city,
                 country: form.country,
-                lat: Number(form.lat),
-                lng: Number(form.lng),
+                mapLink: form.mapLink,
+                lat: 0,
+                lng: 0,
                 guestCountMax: Number(form.guestCountMax),
                 bedrooms: Number(form.bedrooms),
                 beds: Number(form.beds),
                 baths: Number(form.baths),
                 availabilitySummary: form.availabilitySummary,
-                imageUrls: form.imageUrls.split(',').map((item) => item.trim()).filter(Boolean),
+                imageUrls,
                 amenityLabels: form.amenityLabels.split(',').map((item) => item.trim()).filter(Boolean),
                 isGuestFavorite: false,
             });
@@ -186,16 +210,18 @@ export const HostNewProperty = () => {
                     </label>
                 </div>
 
-                <div className={styles.grid}>
-                    <label className={styles.field}>
-                        <span>Latitude</span>
-                        <input type="number" step="any" value={form.lat} onChange={updateField('lat')} required />
-                    </label>
-                    <label className={styles.field}>
-                        <span>Longitude</span>
-                        <input type="number" step="any" value={form.lng} onChange={updateField('lng')} required />
-                    </label>
-                </div>
+                <label className={styles.field}>
+                    <span>Google Maps link</span>
+                    <input
+                        value={form.mapLink}
+                        onChange={updateField('mapLink')}
+                        placeholder="Paste any Google Maps link"
+                        required
+                    />
+                    <small className={styles.helperText}>
+                        Short links like `https://maps.app.goo.gl/...` are fine.
+                    </small>
+                </label>
 
                 <div className={styles.grid}>
                     <label className={styles.field}>
@@ -217,9 +243,23 @@ export const HostNewProperty = () => {
                 </div>
 
                 <label className={styles.field}>
-                    <span>Image URLs</span>
-                    <textarea value={form.imageUrls} onChange={updateField('imageUrls')} placeholder="Comma-separated image URLs" rows={3} />
+                    <span>Property images</span>
+                    <input type="file" accept="image/*" multiple onChange={handleFileChange} />
+                    <small className={styles.helperText}>
+                        Upload images directly. We will store them in Supabase Storage.
+                    </small>
                 </label>
+
+                {selectedFiles.length > 0 && (
+                    <div className={styles.previewGrid}>
+                        {selectedFiles.map((file, index) => (
+                            <figure key={`${file.name}-${index}`} className={styles.previewCard}>
+                                <img src={previewUrls[index]} alt={file.name} className={styles.previewImage} />
+                                <figcaption>{file.name}</figcaption>
+                            </figure>
+                        ))}
+                    </div>
+                )}
 
                 <label className={styles.field}>
                     <span>Amenities</span>

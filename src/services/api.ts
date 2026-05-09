@@ -1,4 +1,3 @@
-import { CATEGORIES, LISTINGS } from '../mock/data';
 import type { CategoriesResponse, ListingsResponse, Listing, CreateListingInput } from '../types';
 import { supabase } from './supabase';
 
@@ -17,6 +16,7 @@ type SupabaseCategoryRow = {
 type SupabaseListingRow = {
     id: string;
     host_id?: string;
+    map_link?: string | null;
     title: string;
     description: string;
     price_per_night: number;
@@ -62,6 +62,7 @@ type SupabaseListingRow = {
 const LISTING_SELECT = `
     host_id,
     id,
+    map_link,
     title,
     description,
     price_per_night,
@@ -112,27 +113,6 @@ const first = <T,>(value: JoinedEntity<T>): T | null => {
     return value;
 };
 
-const toFallbackListing = (item: Listing): Listing => item;
-
-const buildFallbackListings = (category?: string, search?: string): ListingsResponse => {
-    let filtered = LISTINGS.map(toFallbackListing);
-
-    if (category && category !== 'icons') {
-        filtered = filtered.filter((item) => item.category === category);
-    }
-
-    if (search) {
-        const q = search.toLowerCase();
-        filtered = filtered.filter((item) =>
-            item.location.city.toLowerCase().includes(q) ||
-            item.location.country.toLowerCase().includes(q) ||
-            item.title.toLowerCase().includes(q)
-        );
-    }
-
-    return filtered;
-};
-
 const mapListing = (row: SupabaseListingRow): Listing => {
     const category = first(row.category);
     const host = first(row.host);
@@ -179,12 +159,13 @@ const mapListing = (row: SupabaseListingRow): Listing => {
         beds: row.beds ?? undefined,
         baths: row.baths ?? undefined,
         availabilitySummary: row.availability_summary ?? undefined,
+        mapLink: row.map_link ?? undefined,
     };
 };
 
 const fetchSupabaseCategories = async (): Promise<CategoriesResponse> => {
     if (!supabase) {
-        return CATEGORIES;
+        return [];
     }
 
     const { data, error } = await supabase
@@ -194,7 +175,7 @@ const fetchSupabaseCategories = async (): Promise<CategoriesResponse> => {
         .order('sort_order', { ascending: true });
 
     if (error || !data) {
-        return CATEGORIES;
+        return [];
     }
 
     return (data as SupabaseCategoryRow[]).map((category) => ({
@@ -225,12 +206,12 @@ const resolveCategoryId = async (slug: string): Promise<string | null> => {
 
 const fetchSupabaseListings = async (category?: string, search?: string): Promise<ListingsResponse> => {
     if (!supabase) {
-        return buildFallbackListings(category, search);
+        return [];
     }
 
     const categoryId = category ? await resolveCategoryId(category) : null;
     if (category && category !== 'icons' && !categoryId) {
-        return buildFallbackListings(category, search);
+        return [];
     }
 
     let query = supabase
@@ -250,7 +231,7 @@ const fetchSupabaseListings = async (category?: string, search?: string): Promis
     const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error || !data) {
-        return buildFallbackListings(category, search);
+        return [];
     }
 
     return (data as unknown as SupabaseListingRow[]).map(mapListing);
@@ -258,7 +239,7 @@ const fetchSupabaseListings = async (category?: string, search?: string): Promis
 
 const fetchSupabaseListingById = async (id: string): Promise<Listing | undefined> => {
     if (!supabase) {
-        return LISTINGS.find((item) => item.id === id);
+        return undefined;
     }
 
     const { data, error } = await supabase
@@ -268,7 +249,7 @@ const fetchSupabaseListingById = async (id: string): Promise<Listing | undefined
         .maybeSingle();
 
     if (error || !data) {
-        return LISTINGS.find((item) => item.id === id);
+        return undefined;
     }
 
     return mapListing(data as unknown as SupabaseListingRow);
@@ -320,7 +301,7 @@ export const api = {
             setTimeout(() => {
                 fetchSupabaseCategories()
                     .then(resolve)
-                    .catch(() => resolve(CATEGORIES));
+                    .catch(() => resolve([]));
             }, DELAY_MS);
         });
     },
@@ -330,7 +311,7 @@ export const api = {
             setTimeout(() => {
                 fetchSupabaseListings(category, search)
                     .then(resolve)
-                    .catch(() => resolve(buildFallbackListings(category, search)));
+                    .catch(() => resolve([]));
             }, DELAY_MS);
         });
     },
@@ -340,17 +321,14 @@ export const api = {
             setTimeout(() => {
                 fetchSupabaseListingById(id)
                     .then(resolve)
-                    .catch(() => resolve(LISTINGS.find((item) => item.id === id)));
+                    .catch(() => resolve(undefined));
             }, DELAY_MS);
         });
     },
 
     fetchHostListings: async (hostId: string): Promise<ListingsResponse> => {
         if (!supabase) {
-            return LISTINGS.map((item) => ({
-                ...item,
-                hostId,
-            }));
+            return [];
         }
 
         const { data, error } = await supabase
@@ -368,35 +346,7 @@ export const api = {
 
     createListing: async (hostId: string, input: CreateListingInput): Promise<Listing> => {
         if (!supabase) {
-            return {
-                ...LISTINGS[0],
-                id: crypto.randomUUID(),
-                hostId,
-                title: input.title,
-                description: input.description,
-                price: input.pricePerNight,
-                currency: input.currency,
-                images: input.imageUrls.length > 0 ? input.imageUrls : LISTINGS[0].images,
-                location: {
-                    id: crypto.randomUUID(),
-                    city: input.city,
-                    country: input.country,
-                    lat: input.lat,
-                    lng: input.lng,
-                },
-                category: input.categorySlug,
-                categoryLabel: input.categorySlug,
-                amenities: input.amenityLabels,
-                isGuestFavorite: Boolean(input.isGuestFavorite),
-                availableDates: input.availabilitySummary ?? 'Flexible dates',
-                guestCountMax: input.guestCountMax,
-                bedrooms: input.bedrooms,
-                beds: input.beds,
-                baths: input.baths,
-                availabilitySummary: input.availabilitySummary,
-                rating: 0,
-                reviewCount: 0,
-            };
+            throw new Error('Supabase is not configured');
         }
 
         const category = await resolveCategoryRow(input.categorySlug);
@@ -417,6 +367,7 @@ export const api = {
                 country: input.country,
                 lat: input.lat,
                 lng: input.lng,
+                map_link: input.mapLink ?? null,
                 guest_count_max: input.guestCountMax,
                 bedrooms: input.bedrooms,
                 beds: input.beds,

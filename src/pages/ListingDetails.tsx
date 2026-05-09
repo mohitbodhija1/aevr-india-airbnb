@@ -182,6 +182,16 @@ export const ListingDetails = () => {
                                 {listing.host.isSuperhost && 'Superhost · '}
                                 {listingSummary || 'Flexible stay'}
                             </p>
+                            {listing.mapLink && (
+                                <a
+                                    href={listing.mapLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ display: 'inline-flex', marginTop: '10px', color: 'var(--color-primary)', fontWeight: 600 }}
+                                >
+                                    Open on Google Maps
+                                </a>
+                            )}
                         </div>
                         <div className={styles.hostAvatar}>
                             <img src={listing.host.avatarUrl} alt={listing.host.name} />
