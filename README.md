@@ -1,73 +1,29 @@
-# React + TypeScript + Vite
+# Aevr
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Airbnb-style marketplace prototype built with React, TypeScript, Vite, and Supabase.
 
-Currently, two official plugins are available:
+## Supabase Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+1. Create a Supabase project.
+2. Copy `.env.example` to `.env.local` and fill in your project URL and anon key.
+3. Run the SQL in [supabase/schema.sql](./supabase/schema.sql) in the Supabase SQL editor.
+4. Optionally seed categories and amenities with [supabase/seed.sql](./supabase/seed.sql).
 
-## React Compiler
+## What is wired now
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Public browsing data can come from Supabase or fall back to the local mock dataset.
+- Categories, listings, images, amenities, bookings, favorites, reviews, and messaging tables are defined in the schema.
+- RLS policies are included so public browse data stays public while user-owned data remains scoped to the signed-in user.
+- The frontend Supabase client is configured through `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 
-## Expanding the ESLint configuration
+## Local development
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Notes
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- The app still has a mock fallback path, so it remains usable before Supabase is fully connected.
+- Node 20.19+ is recommended for the current Vite version.

@@ -34,7 +34,8 @@ export const Categories: React.FC<CategoriesProps> = ({ selectedCategory, onSele
         <div className={styles.categoriesContainer}>
             {categories.map((cat) => {
                 // Dynamically resolve icon from lucide-react
-                const IconComponent = (Icons as any)[cat.iconName] || Icons.HelpCircle;
+                const iconMap = Icons as unknown as Record<string, React.ElementType>;
+                const IconComponent = iconMap[cat.iconName] ?? Icons.HelpCircle;
 
                 return (
                     <button

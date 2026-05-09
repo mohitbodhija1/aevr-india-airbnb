@@ -94,7 +94,9 @@ export const Header: React.FC = () => {
                 <a href="/favorites" className={styles.hostLink} onClick={(e) => { e.preventDefault(); navigate('/favorites'); }}>
                     Favorites
                 </a>
-                <a href="#" className={styles.hostLink}>Switch to hosting</a>
+                <button className={styles.hostLink} onClick={() => navigate('/host')}>
+                    Switch to hosting
+                </button>
                 <button className={styles.globeButton}>
                     <Globe size={18} />
                 </button>

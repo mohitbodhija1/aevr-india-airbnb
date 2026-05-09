@@ -1,10 +1,63 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, type ElementType } from 'react';
 import { useParams } from 'react-router-dom';
+import {
+    Star,
+    Heart,
+    Share,
+    Grid,
+    Key,
+    Calendar,
+    MapPin,
+    Wifi,
+    Car,
+    Utensils,
+    Bath,
+    BedDouble,
+    Users,
+    Sparkles,
+    Snowflake,
+    Dumbbell,
+    Coffee,
+    ConciergeBell,
+    Waves,
+    Umbrella,
+    Trees,
+} from 'lucide-react';
 import styles from './ListingDetails.module.css';
 import { api } from '../services/api';
 import { favoritesService } from '../services/favorites';
 import type { Listing } from '../types';
-import { Star, Heart, Share, Grid, Key, Calendar, MapPin, Wifi, Car, Utensils } from 'lucide-react';
+
+const amenityIcons: Record<string, ElementType> = {
+    wifi: Wifi,
+    pool: Waves,
+    kitchen: Utensils,
+    ac: Snowflake,
+    heater: Sparkles,
+    gym: Dumbbell,
+    elevator: Sparkles,
+    'private beach': Umbrella,
+    breakfast: Coffee,
+    butler: ConciergeBell,
+    'nature trails': Trees,
+    'organic food': Sparkles,
+    'estate walk': Trees,
+    'lake view': Sparkles,
+    'cycle rental': Car,
+    cafe: Coffee,
+};
+
+const getAmenityIcon = (label: string): ElementType => {
+    const key = label.trim().toLowerCase();
+    return amenityIcons[key] ?? MapPin;
+};
+
+const formatPrice = (amount: number, currency?: string) =>
+    new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: currency ?? 'INR',
+        maximumFractionDigits: 0,
+    }).format(amount);
 
 export const ListingDetails = () => {
     const { id } = useParams<{ id: string }>();
@@ -12,24 +65,23 @@ export const ListingDetails = () => {
     const [loading, setLoading] = useState(true);
     const [isFavorited, setIsFavorited] = useState(false);
 
-    // Reservation State
-    const [checkIn, setCheckIn] = useState('');
-    const [checkOut, setCheckOut] = useState('');
-    const [guestCount, setGuestCount] = useState(1);
-
-    useEffect(() => {
-        // Set default dates (tomorrow and 5 days after)
+    const [checkIn, setCheckIn] = useState(() => {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        return tomorrow.toISOString().split('T')[0];
+    });
+    const [checkOut, setCheckOut] = useState(() => {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const nextWeek = new Date(tomorrow);
         nextWeek.setDate(nextWeek.getDate() + 5);
-
-        setCheckIn(tomorrow.toISOString().split('T')[0]);
-        setCheckOut(nextWeek.toISOString().split('T')[0]);
-    }, []);
+        return nextWeek.toISOString().split('T')[0];
+    });
+    const [guestCount, setGuestCount] = useState(1);
 
     useEffect(() => {
         if (!id) return;
+
         const load = async () => {
             setLoading(true);
             const data = await api.fetchListingById(id);
@@ -37,8 +89,24 @@ export const ListingDetails = () => {
             setIsFavorited(favoritesService.isFavorite(id));
             setLoading(false);
         };
+
         load();
     }, [id]);
+
+    const nights = useMemo(() => {
+        if (!checkIn || !checkOut) return 0;
+        const start = new Date(checkIn);
+        const end = new Date(checkOut);
+        const timeDiff = end.getTime() - start.getTime();
+        const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
+        return days > 0 ? days : 0;
+    }, [checkIn, checkOut]);
+
+    const subtotal = listing ? listing.price * nights : 0;
+    const cleaningFee = 60;
+    const serviceFee = 80;
+    const total = subtotal + cleaningFee + serviceFee;
+    const coverImage = listing?.images[0] ?? 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1200&auto=format&fit=crop';
 
     const toggleFavorite = () => {
         if (!listing) return;
@@ -47,33 +115,10 @@ export const ListingDetails = () => {
     };
 
     const handleReserve = () => {
-        alert(`Reservation confirmed!\n\nListing: ${listing?.title}\nDates: ${checkIn} to ${checkOut}\nGuests: ${guestCount}\nTotal: ₹${calculateTotal()}`);
+        alert(
+            `Reservation confirmed!\n\nListing: ${listing?.title}\nDates: ${checkIn} to ${checkOut}\nGuests: ${guestCount}\nTotal: ${formatPrice(total, listing?.currency)}`
+        );
     };
-
-    // Price Calculation Logic
-    const calculateNights = () => {
-        if (!checkIn || !checkOut) return 0;
-        const start = new Date(checkIn);
-        const end = new Date(checkOut);
-        const timeDiff = end.getTime() - start.getTime();
-        const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
-        return days > 0 ? days : 0;
-    };
-
-    const calculateTotal = () => {
-        if (!listing) return 0;
-        const nights = calculateNights();
-        const basePrice = listing.price * nights;
-        const cleaningFee = 60;
-        const serviceFee = 80;
-        return basePrice + cleaningFee + serviceFee;
-    };
-
-    const nights = calculateNights();
-    const subtotal = listing ? listing.price * nights : 0;
-    const cleaningFee = 60;
-    const serviceFee = 80;
-    const total = subtotal + cleaningFee + serviceFee;
 
     if (loading) {
         return <div className={styles.container} style={{ height: '80vh' }} />;
@@ -83,9 +128,16 @@ export const ListingDetails = () => {
         return <div className={styles.container}>Listing not found</div>;
     }
 
+    const guestLimit = listing.guestCountMax ?? 10;
+    const listingSummary = [
+        listing.guestCountMax ? `${listing.guestCountMax} guests` : null,
+        listing.bedrooms ? `${listing.bedrooms} bedrooms` : null,
+        listing.beds ? `${listing.beds} beds` : null,
+        listing.baths ? `${listing.baths} baths` : null,
+    ].filter((part): part is string => Boolean(part)).join(' · ');
+
     return (
         <div className={styles.container}>
-            {/* Heading */}
             <div className={styles.heading}>
                 <h1 className={styles.title}>{listing.title}</h1>
                 <div className={styles.subHeading}>
@@ -107,16 +159,13 @@ export const ListingDetails = () => {
                 </div>
             </div>
 
-            {/* Photo Grid */}
             <div className={styles.photoGrid}>
-                {/* Main large photo */}
                 <div className={styles.mainPhoto}>
-                    <img src={listing.images[0]} alt="Main" className={styles.photo} />
+                    <img src={coverImage} alt={listing.title} className={styles.photo} />
                 </div>
-                {/* Side photos */}
                 <div className={styles.sidePhotos}>
                     {listing.images.slice(1, 5).map((img, idx) => (
-                        <img key={idx} src={img} alt={`View ${idx}`} className={styles.photo} />
+                        <img key={`${img}-${idx}`} src={img} alt={`${listing.title} view ${idx + 2}`} className={styles.photo} />
                     ))}
                 </div>
                 <button className={styles.showAllButton}>
@@ -124,16 +173,14 @@ export const ListingDetails = () => {
                 </button>
             </div>
 
-            {/* Content Grid */}
             <div className={styles.contentGrid}>
-                {/* Left Column */}
                 <div className={styles.leftColumn}>
                     <div className={styles.hostSection}>
                         <div className={styles.hostInfo}>
-                            <h2>{listing.category === 'farms' ? 'Farm stay' : `Hosted by ${listing.host.name}`}</h2>
+                            <h2>{listing.categoryLabel ?? `Hosted by ${listing.host.name}`}</h2>
                             <p style={{ color: 'var(--text-secondary)' }}>
                                 {listing.host.isSuperhost && 'Superhost · '}
-                                4 guests · 2 bedrooms · 2 beds · 1 bath
+                                {listingSummary || 'Flexible stay'}
                             </p>
                         </div>
                         <div className={styles.hostAvatar}>
@@ -141,7 +188,6 @@ export const ListingDetails = () => {
                         </div>
                     </div>
 
-                    {/* Features */}
                     <div className={styles.feature}>
                         <div className={styles.featureIcon}><Key size={24} /></div>
                         <div className={styles.featureText}>
@@ -161,39 +207,75 @@ export const ListingDetails = () => {
                     <div className={styles.feature}>
                         <div className={styles.featureIcon}><Calendar size={24} /></div>
                         <div className={styles.featureText}>
-                            <h3>Free cancellation for 48 hours.</h3>
+                            <h3>{listing.availabilitySummary ?? 'Flexible cancellation policy'}</h3>
                         </div>
                     </div>
 
-                    {/* Description */}
-                    <div className={styles.description}>
-                        <p>{listing.description}</p>
-                        <p style={{ marginTop: '16px' }}>
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-                        </p>
+                    <div className={styles.feature}>
+                        <div className={styles.featureIcon}><Users size={24} /></div>
+                        <div className={styles.featureText}>
+                            <h3>At a glance</h3>
+                            <p>
+                                {listing.guestCountMax ? `${listing.guestCountMax} guests` : 'Guest-friendly stay'}
+                                {listing.bedrooms ? ` · ${listing.bedrooms} bedrooms` : ''}
+                                {listing.beds ? ` · ${listing.beds} beds` : ''}
+                                {listing.baths ? ` · ${listing.baths} baths` : ''}
+                            </p>
+                        </div>
                     </div>
 
-                    {/* Amenities */}
+                    <div className={styles.description}>
+                        <p>{listing.description}</p>
+                        {listing.host.bio && (
+                            <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>
+                                {listing.host.bio}
+                            </p>
+                        )}
+                    </div>
+
                     <div className={styles.amenities}>
                         <h2>What this place offers</h2>
                         <div className={styles.amenityList}>
-                            <div className={styles.amenityItem}><Wifi size={20} /> Wifi</div>
-                            <div className={styles.amenityItem}><Car size={20} /> Free parking on premises</div>
-                            <div className={styles.amenityItem}><Utensils size={20} /> Kitchen</div>
-                            {/* Dynamically mapped from data but hardcoded for now for visuals */}
-                            {listing.amenities.map(a => (
-                                <div key={a} className={styles.amenityItem}><MapPin size={20} /> {a}</div>
-                            ))}
+                            {listing.amenities.length > 0 ? listing.amenities.map((amenity) => {
+                                const AmenityIcon = getAmenityIcon(amenity);
+                                return (
+                                    <div key={amenity} className={styles.amenityItem}>
+                                        <AmenityIcon size={20} />
+                                        {amenity}
+                                    </div>
+                                );
+                            }) : (
+                                <>
+                                    <div className={styles.amenityItem}><Wifi size={20} /> Wifi</div>
+                                    <div className={styles.amenityItem}><Car size={20} /> Free parking on premises</div>
+                                    <div className={styles.amenityItem}><Utensils size={20} /> Kitchen</div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className={styles.feature}>
+                        <div className={styles.featureIcon}><BedDouble size={24} /></div>
+                        <div className={styles.featureText}>
+                            <h3>Booking details</h3>
+                            <p>{formatPrice(listing.price, listing.currency)} per night, before fees and taxes.</p>
+                        </div>
+                    </div>
+
+                    <div className={styles.feature}>
+                        <div className={styles.featureIcon}><Bath size={24} /></div>
+                        <div className={styles.featureText}>
+                            <h3>{listing.baths ? `${listing.baths} bath${listing.baths > 1 ? 's' : ''}` : 'Comfortable bath setup'}</h3>
+                            <p>Designed for easy check-in and a smooth stay.</p>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Column - Booking Card */}
                 <div className={styles.bookingCardWrapper}>
                     <div className={styles.bookingCard}>
                         <div className={styles.cardHeader}>
                             <div className={styles.cardPrice}>
-                                ₹{listing.price} <span style={{ fontSize: '1rem', fontWeight: 400 }}>night</span>
+                                {formatPrice(listing.price, listing.currency)} <span style={{ fontSize: '1rem', fontWeight: 400 }}>night</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.875rem' }}>
                                 <Star size={14} fill="currentColor" />
@@ -240,7 +322,7 @@ export const ListingDetails = () => {
                                         style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--color-gray-400)', background: 'white', cursor: 'pointer' }}
                                     >-</button>
                                     <button
-                                        onClick={() => setGuestCount(Math.min(10, guestCount + 1))}
+                                        onClick={() => setGuestCount(Math.min(guestLimit, guestCount + 1))}
                                         style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--color-gray-400)', background: 'white', cursor: 'pointer' }}
                                     >+</button>
                                 </div>
@@ -257,20 +339,20 @@ export const ListingDetails = () => {
                         {nights > 0 && (
                             <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '16px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                                    <span style={{ textDecoration: 'underline' }}>₹{listing.price} x {nights} nights</span>
-                                    <span>₹{subtotal}</span>
+                                    <span style={{ textDecoration: 'underline' }}>{formatPrice(listing.price, listing.currency)} x {nights} nights</span>
+                                    <span>{formatPrice(subtotal, listing.currency)}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
                                     <span style={{ textDecoration: 'underline' }}>Cleaning fee</span>
-                                    <span>₹{cleaningFee}</span>
+                                    <span>{formatPrice(cleaningFee, listing.currency)}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
                                     <span style={{ textDecoration: 'underline' }}>Aevr service fee</span>
-                                    <span>₹{serviceFee}</span>
+                                    <span>{formatPrice(serviceFee, listing.currency)}</span>
                                 </div>
                                 <div style={{ borderTop: '1px solid var(--color-gray-100)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
                                     <span>Total before taxes</span>
-                                    <span>₹{total}</span>
+                                    <span>{formatPrice(total, listing.currency)}</span>
                                 </div>
                             </div>
                         )}

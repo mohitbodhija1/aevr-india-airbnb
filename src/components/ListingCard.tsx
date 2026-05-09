@@ -12,6 +12,10 @@ interface ListingCardProps {
 export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isFavorited, setIsFavorited] = useState(favoritesService.isFavorite(listing.id));
+    const hasImages = listing.images.length > 0;
+    const coverImage = hasImages
+        ? (listing.images[currentImageIndex] ?? listing.images[0])
+        : 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1200&auto=format&fit=crop';
 
     useEffect(() => {
         // Sync with external updates (e.g. from other tabs or components)
@@ -24,11 +28,13 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
 
     const nextImage = (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (!hasImages) return;
         setCurrentImageIndex((prev) => (prev + 1) % listing.images.length);
     };
 
     const prevImage = (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (!hasImages) return;
         setCurrentImageIndex((prev) => (prev - 1 + listing.images.length) % listing.images.length);
     };
 
@@ -40,12 +46,18 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
         setIsFavorited(!isFavorited);
     };
 
+    const priceLabel = new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: listing.currency ?? 'INR',
+        maximumFractionDigits: 0,
+    }).format(listing.price);
+
     return (
         <div className={styles.card}>
             <Link to={`/rooms/${listing.id}`} style={{ display: 'contents', color: 'inherit' }}>
                 <div className={styles.imageContainer}>
                     <img
-                        src={listing.images[currentImageIndex]}
+                        src={coverImage}
                         alt={listing.title}
                         className={styles.image}
                     />
@@ -101,10 +113,12 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
                             <span>{listing.rating}</span>
                         </div>
                     </div>
-                    <div className={styles.subtitle}>{listing.category === 'farms' ? 'Farm stay' : 'Stay with ' + listing.host.name}</div>
+                    <div className={styles.subtitle}>
+                        {listing.categoryLabel ?? (listing.category === 'farms' ? 'Farm stay' : `Stay with ${listing.host.name}`)}
+                    </div>
                     <div className={styles.dates}>{listing.availableDates}</div>
                     <div className={styles.priceRow}>
-                        <div className={styles.price}>₹{listing.price}</div>
+                        <div className={styles.price}>{priceLabel}</div>
                         <div className={styles.period}>night</div>
                     </div>
                 </div>
