@@ -11,6 +11,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--spacing-4);
 }
 
 /* Logo Section */
@@ -105,6 +106,22 @@
     gap: var(--spacing-2);
 }
 
+.mobileMenuButton {
+    display: none;
+}
+
+.menuBackdrop {
+    display: none;
+}
+
+.mobileMenuPanel {
+    display: none;
+}
+
+.menuItem {
+    display: none;
+}
+
 .hostLink {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
@@ -163,13 +180,27 @@
 @media (max-width: 744px) {
     .header {
         height: var(--header-height);
-        padding: 0 24px;
-        gap: 12px;
+        padding: 0 16px;
+        gap: 8px;
+    }
+
+    .logoContainer {
+        flex: 0 0 auto;
+    }
+
+    .logoText {
+        font-size: var(--font-size-lg);
+        gap: 6px;
+    }
+
+    .logoText svg {
+        width: 24px;
+        height: 24px;
     }
 
     .searchContainer {
-        min-width: unset;
         flex: 1;
+        min-width: 0;
     }
 
     .searchBar,
@@ -178,14 +209,6 @@
         justify-content: flex-start;
     }
 
-    .userMenu,
-    .globeButton,
-    .hostLink {
-        display: none;
-        /* Show only basic header on mobile for now */
-    }
-
-    /* On mobile, show only the search icon and maybe one text input */
     .searchButton:not(:first-child) {
         display: none;
     }
@@ -194,16 +217,80 @@
         border: none;
         flex: 1;
         justify-content: flex-start;
+        padding-left: 12px;
+        padding-right: 12px;
     }
 
-    .logoContainer {
-        flex: 0;
+    .userMenu {
         display: none;
-        /* Often hidden on search focus mobile, but keep simple */
     }
 
-    /* Show logo only if not searching? keeping simple */
-    .logoContainer {
+    .mobileMenuButton {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 9999px;
+        color: var(--text-primary);
+        background-color: var(--color-white);
+        border: 1px solid var(--color-gray-100);
+        flex: 0 0 auto;
+    }
+
+    .mobileMenuButton:hover {
+        background-color: var(--color-gray-50);
+    }
+
+    .searchBar {
+        padding: 0 6px 0 0;
+        height: 44px;
+        min-width: 0;
+    }
+
+    .searchIconContainer {
+        width: 28px;
+        height: 28px;
+    }
+
+    .menuBackdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(34, 34, 34, 0.28);
+        border: none;
+        z-index: 999;
+    }
+
+    .mobileMenuPanel {
         display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: calc(var(--header-height) + 8px);
+        right: 16px;
+        width: min(280px, calc(100vw - 32px));
+        padding: 8px;
+        background: var(--color-white);
+        border: 1px solid var(--color-gray-100);
+        border-radius: 20px;
+        box-shadow: var(--shadow-lg);
+        z-index: 1001;
+    }
+
+    .menuItem {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 14px;
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-primary);
+        text-align: left;
+    }
+
+    .menuItem:hover {
+        background-color: var(--color-gray-50);
     }
 }

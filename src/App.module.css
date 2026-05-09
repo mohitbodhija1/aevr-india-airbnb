@@ -1,56 +1,28 @@
 .mainContainer {
     padding-top: calc(var(--header-height) + var(--category-bar-height) + 24px);
-    /* Space for fixed header/cat bar */
     padding-left: var(--container-padding);
     padding-right: var(--container-padding);
-    padding-bottom: 40px;
-    min-height: 80vh;
+    padding-bottom: 48px;
+    min-height: 100vh;
 }
 
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-    /* Responsive grid */
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
     gap: 40px 24px;
-}
-
-/* Specific Airbnb breakpoints approximation */
-@media (min-width: 550px) {
-    .grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (min-width: 950px) {
-    .grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
-@media (min-width: 1128px) {
-    .grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
-
-@media (min-width: 1640px) {
-    .grid {
-        grid-template-columns: repeat(5, 1fr);
-    }
-}
-
-@media (min-width: 1880px) {
-    .grid {
-        grid-template-columns: repeat(6, 1fr);
-    }
 }
 
 @media (max-width: 744px) {
     .mainContainer {
-        padding-left: 24px;
-        padding-right: 24px;
-        padding-top: calc(var(--header-height) + 90px);
-        /* Adjust for mobile stacked headers if needed */
+        padding-left: var(--container-padding);
+        padding-right: var(--container-padding);
+        padding-top: calc(var(--header-height) + var(--category-bar-height) + 16px);
+        padding-bottom: 32px;
+    }
+
+    .grid {
+        grid-template-columns: 1fr;
+        gap: 24px;
     }
 }
 

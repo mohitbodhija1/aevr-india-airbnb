@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { HostLayout } from './components/HostLayout';
 import { Home } from './pages/Home';
 import { ListingDetails } from './pages/ListingDetails';
 import { Favorites } from './pages/Favorites';
@@ -17,9 +18,11 @@ function App() {
           <Route path="rooms/:id" element={<ListingDetails />} />
           <Route path="favorites" element={<Favorites />} />
         </Route>
-        <Route path="/host" element={<HostDashboard />} />
-        <Route path="/host/auth" element={<HostAuth />} />
-        <Route path="/host/new" element={<HostNewProperty />} />
+        <Route path="/host" element={<HostLayout />}>
+          <Route index element={<HostDashboard />} />
+          <Route path="auth" element={<HostAuth />} />
+          <Route path="new" element={<HostNewProperty />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );

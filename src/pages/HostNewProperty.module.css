@@ -3,7 +3,7 @@
     background:
         radial-gradient(circle at top left, rgba(0, 132, 137, 0.08), transparent 26%),
         linear-gradient(180deg, #fff 0%, #f7f7f7 100%);
-    padding: 32px var(--container-padding) 48px;
+    padding: calc(var(--header-height) + 24px) var(--container-padding) 48px;
 }
 
 .header {
@@ -162,7 +162,7 @@
 
 @media (max-width: 640px) {
     .page {
-        padding: 24px 16px 32px;
+        padding: calc(var(--header-height) + 20px) 16px 32px;
     }
 
     .grid {

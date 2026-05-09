@@ -8,6 +8,7 @@ export const Header: React.FC = () => {
     const [searchParams] = useSearchParams();
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -19,6 +20,11 @@ export const Header: React.FC = () => {
         }
         setIsSearchOpen(false);
         navigate(`/?${params.toString()}`);
+    };
+
+    const handleNavigate = (path: string) => {
+        setIsMenuOpen(false);
+        navigate(path);
     };
 
     const clearSearch = (e: React.MouseEvent) => {
@@ -107,6 +113,38 @@ export const Header: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            <button
+                type="button"
+                className={styles.mobileMenuButton}
+                aria-label="Open menu"
+                aria-expanded={isMenuOpen}
+                onClick={() => setIsMenuOpen((value) => !value)}
+            >
+                <Menu size={22} />
+            </button>
+
+            {isMenuOpen && (
+                <>
+                    <button
+                        type="button"
+                        className={styles.menuBackdrop}
+                        aria-label="Close menu"
+                        onClick={() => setIsMenuOpen(false)}
+                    />
+                    <div className={styles.mobileMenuPanel} role="menu" aria-label="Mobile navigation">
+                        <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/favorites')}>
+                            Favorites
+                        </button>
+                        <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/host')}>
+                            Switch to hosting
+                        </button>
+                        <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/')}>
+                            Home
+                        </button>
+                    </div>
+                </>
+            )}
         </header>
     );
 };

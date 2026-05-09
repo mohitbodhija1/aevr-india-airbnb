@@ -7,6 +7,7 @@
         radial-gradient(circle at bottom right, rgba(255, 56, 92, 0.12), transparent 30%),
         linear-gradient(180deg, #fff 0%, #f7f7f7 100%);
     color: var(--text-primary);
+    padding-top: var(--header-height);
 }
 
 .hero {
@@ -179,6 +180,7 @@
 @media (max-width: 980px) {
     .page {
         grid-template-columns: 1fr;
+        padding-top: var(--header-height);
     }
 
     .hero {

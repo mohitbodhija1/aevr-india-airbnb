@@ -56,6 +56,12 @@
 }
 
 @media (max-width: 744px) {
+    .footer {
+        padding-left: var(--container-padding);
+        padding-right: var(--container-padding);
+        margin-top: 32px;
+    }
+
     .content {
         grid-template-columns: 1fr;
     }
