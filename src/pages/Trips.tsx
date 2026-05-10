@@ -188,7 +188,7 @@ export const Trips = () => {
                                     <span><Star size={14} /> {booking.subtotal > 0 ? formatPrice(booking.subtotal, booking.listing.currency) : 'Booked stay'}</span>
                                     <span><Users size={14} /> {booking.listing.price ? `${formatPrice(booking.listing.price, booking.listing.currency)} / night` : 'Nightly rate unavailable'}</span>
                                     <span><BedDouble size={14} /> {booking.roomCount ?? 1} x {booking.roomTypeName ?? 'Room'}</span>
-                                    <span><Clock3 size={14} /> {booking.fees > 0 ? `Fees ${formatPrice(booking.fees + booking.taxes, booking.listing.currency)}` : 'All fees included'}</span>
+                                    <span><Clock3 size={14} /> GST {formatPrice(booking.taxes, booking.listing.currency)}</span>
                                     <span><ShieldCheck size={14} /> {booking.status === 'confirmed' ? 'Ready to go' : 'Waiting for review'}</span>
                                 </div>
                             </div>

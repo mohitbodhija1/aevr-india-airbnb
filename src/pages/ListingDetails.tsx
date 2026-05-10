@@ -96,6 +96,18 @@ const formatDateRange = (startDate: string, endDate: string) => {
     return `${start} - ${end}`;
 };
 
+const getHotelGstRate = (nightlyRate: number) => {
+    if (nightlyRate <= 1000) {
+        return 0;
+    }
+
+    if (nightlyRate <= 7500) {
+        return 0.05;
+    }
+
+    return 0.18;
+};
+
 const fallbackRoomTypes = (listing?: Listing): RoomType[] => {
     if (!listing) {
         return [];
@@ -256,10 +268,9 @@ export const ListingDetails = () => {
     const nights = useMemo(() => nightsBetween(checkIn, checkOut), [checkIn, checkOut]);
     const nightlyRate = selectedRoomType?.pricePerNight ?? listing?.price ?? 0;
     const subtotal = listing ? nightlyRate * nights * roomCount : 0;
-    const cleaningFee = listing ? Math.max(45, Math.round(nightlyRate * 0.06)) : 0;
-    const serviceFee = listing ? Math.max(35, Math.round(subtotal * 0.12)) : 0;
-    const taxes = listing ? Math.round(subtotal * 0.1) : 0;
-    const total = subtotal + cleaningFee + serviceFee + taxes;
+    const gstRate = listing ? getHotelGstRate(nightlyRate) : 0;
+    const taxes = listing ? Math.round(subtotal * gstRate) : 0;
+    const total = subtotal + taxes;
     const coverImage =
         selectedRoomType?.photos?.[0]
         ?? listing?.images[0]
@@ -315,10 +326,9 @@ export const ListingDetails = () => {
             }
 
             const bookingSubtotal = bookingRoomTypePrice * bookingRoomCount * bookingNights;
-            const bookingCleaningFee = Math.max(45, Math.round(bookingRoomTypePrice * 0.06));
-            const bookingServiceFee = Math.max(35, Math.round(bookingSubtotal * 0.12));
-            const bookingTaxes = Math.round(bookingSubtotal * 0.1);
-            const bookingTotal = bookingSubtotal + bookingCleaningFee + bookingServiceFee + bookingTaxes;
+            const bookingGstRate = getHotelGstRate(bookingRoomTypePrice);
+            const bookingTaxes = Math.round(bookingSubtotal * bookingGstRate);
+            const bookingTotal = bookingSubtotal + bookingTaxes;
 
             setSubmittingBooking(true);
 
@@ -332,7 +342,7 @@ export const ListingDetails = () => {
                     roomTypePrice: bookingRoomTypePrice,
                     roomCount: bookingRoomCount,
                     subtotal: bookingSubtotal,
-                    fees: bookingCleaningFee + bookingServiceFee,
+                    fees: 0,
                     taxes: bookingTaxes,
                     total: bookingTotal,
                     status: mode === 'reserve' ? 'confirmed' : 'pending',
@@ -749,20 +759,15 @@ export const ListingDetails = () => {
                                 <span>{formatPrice(subtotal, listing.currency)}</span>
                             </div>
                             <div className={styles.breakdownRow}>
-                                <span>Cleaning fee</span>
-                                <span>{formatPrice(cleaningFee, listing.currency)}</span>
-                            </div>
-                            <div className={styles.breakdownRow}>
-                                <span>Service fee</span>
-                                <span>{formatPrice(serviceFee, listing.currency)}</span>
-                            </div>
-                            <div className={styles.breakdownRow}>
-                                <span>Taxes</span>
+                                <span>GST {gstRate > 0 ? `(${Math.round(gstRate * 100)}%)` : '(Exempt)'}</span>
                                 <span>{formatPrice(taxes, listing.currency)}</span>
                             </div>
                             <div className={`${styles.breakdownRow} ${styles.totalRow}`}>
                                 <span>Total</span>
                                 <span>{formatPrice(total, listing.currency)}</span>
+                            </div>
+                            <div className={styles.taxNote}>
+                                Hotel stays at or below ₹1,000 per night are exempt. ₹1,001 - ₹7,500 per night attracts 5% GST without ITC. Above ₹7,500 per night attracts 18% GST with ITC.
                             </div>
                         </div>
                     </div>
