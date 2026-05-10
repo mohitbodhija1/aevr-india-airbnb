@@ -50,6 +50,7 @@ create table if not exists public.listings (
     review_count integer not null default 0,
     is_guest_favorite boolean not null default false,
     availability_summary text,
+    room_types jsonb not null default '[]'::jsonb,
     map_link text,
     city text not null,
     country text not null,
@@ -66,6 +67,7 @@ create table if not exists public.listings (
 
 -- Backfill columns for environments where listings existed before these fields were introduced.
 alter table public.listings add column if not exists map_link text;
+alter table public.listings add column if not exists room_types jsonb not null default '[]'::jsonb;
 
 create table if not exists public.listing_images (
     id uuid primary key default gen_random_uuid(),
@@ -102,6 +104,9 @@ create table if not exists public.bookings (
     check_in date not null,
     check_out date not null,
     guest_count integer not null check (guest_count > 0),
+    room_type_name text,
+    room_type_price numeric(12, 2),
+    room_count integer not null default 1 check (room_count > 0),
     subtotal numeric(12, 2) not null,
     fees numeric(12, 2) not null default 0,
     taxes numeric(12, 2) not null default 0,
@@ -111,6 +116,10 @@ create table if not exists public.bookings (
     updated_at timestamptz not null default timezone('utc', now()),
     constraint bookings_valid_range check (check_in < check_out)
 );
+
+alter table public.bookings add column if not exists room_type_name text;
+alter table public.bookings add column if not exists room_type_price numeric(12, 2);
+alter table public.bookings add column if not exists room_count integer not null default 1;
 
 create table if not exists public.reviews (
     id uuid primary key default gen_random_uuid(),

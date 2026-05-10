@@ -6,7 +6,7 @@ import { api } from '../services/api';
 import { authService } from '../services/auth';
 import { hasSupabaseConfig } from '../services/supabase';
 import { uploadListingImages } from '../services/storage';
-import type { AvailabilityBlock, AvailabilityBlockStatus, Category, Listing } from '../types';
+import type { AvailabilityBlock, AvailabilityBlockStatus, Category, Listing, RoomType } from '../types';
 
 type FormState = {
     title: string;
@@ -23,6 +23,18 @@ type FormState = {
     baths: string;
     availabilitySummary: string;
     amenityLabels: string;
+};
+
+type RoomTypeFormState = {
+    id: string;
+    name: string;
+    pricePerNight: string;
+    totalCount: string;
+    maxGuests: string;
+    beds: string;
+    description: string;
+    photoUrls: string[];
+    photoFiles: File[];
 };
 
 const initialState: FormState = {
@@ -42,6 +54,18 @@ const initialState: FormState = {
     amenityLabels: 'Wifi,Kitchen',
 };
 
+const createRoomTypeRow = (overrides: Partial<RoomTypeFormState> = {}): RoomTypeFormState => ({
+    id: overrides.id ?? crypto.randomUUID(),
+    name: overrides.name ?? 'Standard room',
+    pricePerNight: overrides.pricePerNight ?? '',
+    totalCount: overrides.totalCount ?? '1',
+    maxGuests: overrides.maxGuests ?? '2',
+    beds: overrides.beds ?? '1',
+    description: overrides.description ?? '',
+    photoUrls: overrides.photoUrls ?? [],
+    photoFiles: overrides.photoFiles ?? [],
+});
+
 const listingToForm = (listing: Listing): FormState => ({
     title: listing.title,
     description: listing.description,
@@ -58,6 +82,26 @@ const listingToForm = (listing: Listing): FormState => ({
     availabilitySummary: listing.availabilitySummary ?? listing.availableDates ?? 'Flexible dates',
     amenityLabels: listing.amenities.join(', '),
 });
+
+const roomTypesToForm = (roomTypes?: RoomType[], fallbackPrice?: number): RoomTypeFormState[] => {
+    if (!roomTypes || roomTypes.length === 0) {
+        return [createRoomTypeRow({ pricePerNight: fallbackPrice != null ? String(fallbackPrice) : '' })];
+    }
+
+    return roomTypes.map((roomType) =>
+        createRoomTypeRow({
+            id: roomType.id,
+            name: roomType.name,
+            pricePerNight: String(roomType.pricePerNight),
+            totalCount: String(roomType.totalCount),
+            maxGuests: roomType.maxGuests != null ? String(roomType.maxGuests) : '',
+            beds: roomType.beds != null ? String(roomType.beds) : '',
+            description: roomType.description ?? '',
+            photoUrls: roomType.photos ?? [],
+            photoFiles: [],
+        })
+    );
+};
 
 const formatBlockRange = (startDate: string, endDate: string) =>
     `${new Intl.DateTimeFormat('en-IN', { month: 'short', day: 'numeric' }).format(new Date(`${startDate}T00:00:00Z`))} - ${new Intl.DateTimeFormat('en-IN', { month: 'short', day: 'numeric' }).format(new Date(`${endDate}T00:00:00Z`))}`;
@@ -77,6 +121,7 @@ export const HostNewProperty = () => {
     const [blockSaving, setBlockSaving] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
     const [form, setForm] = useState<FormState>(initialState);
+    const [roomTypes, setRoomTypes] = useState<RoomTypeFormState[]>([createRoomTypeRow()]);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
     const [existingImages, setExistingImages] = useState<string[]>([]);
@@ -109,14 +154,16 @@ export const HostNewProperty = () => {
                     setError('Listing not found.');
                 } else {
                     setForm(listingToForm(listing));
+                    setRoomTypes(roomTypesToForm(listing.roomTypes, listing.price));
                     setExistingImages(listing.images);
                     setAvailabilityBlocks(await api.fetchAvailabilityBlocks(listingId));
                 }
             } else {
                 setForm((current) => ({
                     ...current,
-                    categorySlug: data.find((item) => item.slug && item.slug !== 'icons')?.slug ?? current.categorySlug,
+                categorySlug: data.find((item) => item.slug && item.slug !== 'icons')?.slug ?? current.categorySlug,
                 }));
+                setRoomTypes([createRoomTypeRow()]);
             }
 
             setLoading(false);
@@ -138,12 +185,55 @@ export const HostNewProperty = () => {
         event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
     ) => {
         setForm((current) => ({ ...current, [field]: event.target.value }));
+        if (field === 'pricePerNight') {
+            setRoomTypes((current) =>
+                current.length === 1 && !current[0].pricePerNight
+                    ? [{ ...current[0], pricePerNight: event.target.value }]
+                    : current
+            );
+        }
     };
 
     const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
         setError(null);
         const files = Array.from(event.target.files ?? []);
         setSelectedFiles(files);
+    };
+
+    const updateRoomType = (roomTypeId: string, field: keyof RoomTypeFormState) => (
+        event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    ) => {
+        setRoomTypes((current) =>
+            current.map((roomType) =>
+                roomType.id === roomTypeId ? { ...roomType, [field]: event.target.value } : roomType
+            )
+        );
+    };
+
+    const handleRoomTypePhotosChange = (roomTypeId: string) => (event: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files ?? []);
+        setError(null);
+
+        if (files.length === 0) {
+            return;
+        }
+
+        setRoomTypes((current) =>
+            current.map((roomType) =>
+                roomType.id === roomTypeId ? { ...roomType, photoFiles: files } : roomType
+            )
+        );
+    };
+
+    const addRoomType = () => {
+        setRoomTypes((current) => [...current, createRoomTypeRow()]);
+    };
+
+    const removeRoomType = (roomTypeId: string) => {
+        setRoomTypes((current) => {
+            const remaining = current.filter((roomType) => roomType.id !== roomTypeId);
+            return remaining.length > 0 ? remaining : [createRoomTypeRow()];
+        });
     };
 
     const refreshAvailabilityBlocks = async () => {
@@ -174,6 +264,52 @@ export const HostNewProperty = () => {
                 throw new Error('Add at least one property image.');
             }
 
+            const normalizedRoomTypes = (await Promise.all(roomTypes.map(async (roomType, index): Promise<RoomType | null> => {
+                    const pricePerNight = Number(roomType.pricePerNight || form.pricePerNight);
+                    const totalCount = Number(roomType.totalCount || 1);
+                    const maxGuests = roomType.maxGuests ? Number(roomType.maxGuests) : undefined;
+                    const beds = roomType.beds ? Number(roomType.beds) : undefined;
+
+                    if (!roomType.name.trim() || !Number.isFinite(pricePerNight) || pricePerNight <= 0 || !Number.isFinite(totalCount) || totalCount <= 0) {
+                        return null;
+                    }
+
+                    const uploadedRoomPhotos = roomType.photoFiles.length > 0
+                        ? await uploadListingImages(session.user.id, roomType.photoFiles)
+                        : roomType.photoUrls;
+
+                    const normalizedRoomType: RoomType = {
+                        id: roomType.id || `${index}-${roomType.name.toLowerCase().replace(/\s+/g, '-')}`,
+                        name: roomType.name.trim(),
+                        pricePerNight,
+                        totalCount,
+                    };
+
+                    if (Number.isFinite(maxGuests ?? NaN)) {
+                        normalizedRoomType.maxGuests = maxGuests;
+                    }
+
+                    if (Number.isFinite(beds ?? NaN)) {
+                        normalizedRoomType.beds = beds;
+                    }
+
+                    if (roomType.description.trim()) {
+                        normalizedRoomType.description = roomType.description.trim();
+                    }
+
+                    if (uploadedRoomPhotos.length > 0) {
+                        normalizedRoomType.photos = uploadedRoomPhotos;
+                    }
+                    return normalizedRoomType;
+                })))
+                .filter((item): item is RoomType => Boolean(item));
+
+            if (normalizedRoomTypes.length === 0) {
+                throw new Error('Add at least one room type with a price and count.');
+            }
+
+            const startingPrice = Math.min(...normalizedRoomTypes.map((roomType) => roomType.pricePerNight));
+
             const imageUrls = selectedFiles.length > 0
                 ? await uploadListingImages(session.user.id, selectedFiles)
                 : undefined;
@@ -185,7 +321,7 @@ export const HostNewProperty = () => {
             const payload = {
                 title: form.title,
                 description: form.description,
-                pricePerNight: Number(form.pricePerNight),
+                pricePerNight: startingPrice,
                 currency: form.currency,
                 categorySlug: form.categorySlug,
                 city: form.city,
@@ -200,6 +336,7 @@ export const HostNewProperty = () => {
                 availabilitySummary: form.availabilitySummary,
                 amenityLabels: form.amenityLabels.split(',').map((item) => item.trim()).filter(Boolean),
                 isGuestFavorite: false,
+                roomTypes: normalizedRoomTypes,
                 ...(imageUrls ? { imageUrls } : {}),
             };
 
@@ -321,14 +458,99 @@ export const HostNewProperty = () => {
 
                 <div className={styles.grid}>
                     <label className={styles.field}>
-                        <span>Price per night</span>
+                        <span>Starting price per night</span>
                         <input type="number" min="0" value={form.pricePerNight} onChange={updateField('pricePerNight')} required />
+                        <small className={styles.helperText}>
+                            This is the base price shown on search cards. Room types below can have their own prices.
+                        </small>
                     </label>
                     <label className={styles.field}>
                         <span>Currency</span>
                         <input value={form.currency} onChange={updateField('currency')} required />
                     </label>
                 </div>
+
+                <section className={styles.roomTypeSection}>
+                    <div className={styles.roomTypeHeader}>
+                        <div>
+                            <h2>Room types</h2>
+                            <p>Add one or more room categories with their own nightly rates and inventory count.</p>
+                        </div>
+                        <button type="button" className={styles.secondaryButton} onClick={addRoomType}>
+                            <Plus size={16} /> Add room type
+                        </button>
+                    </div>
+
+                    <div className={styles.roomTypeList}>
+                        {roomTypes.map((roomType, index) => (
+                            <article key={roomType.id} className={styles.roomTypeCard}>
+                                <div className={styles.roomTypeGrid}>
+                                    <label className={styles.field}>
+                                        <span>Room type name</span>
+                                        <input value={roomType.name} onChange={updateRoomType(roomType.id, 'name')} placeholder="Deluxe king room" required />
+                                    </label>
+                                    <label className={styles.field}>
+                                        <span>Nightly price</span>
+                                        <input type="number" min="0" value={roomType.pricePerNight} onChange={updateRoomType(roomType.id, 'pricePerNight')} required />
+                                    </label>
+                                    <label className={styles.field}>
+                                        <span>Count</span>
+                                        <input type="number" min="1" value={roomType.totalCount} onChange={updateRoomType(roomType.id, 'totalCount')} required />
+                                    </label>
+                                    <label className={styles.field}>
+                                        <span>Max guests</span>
+                                        <input type="number" min="1" value={roomType.maxGuests} onChange={updateRoomType(roomType.id, 'maxGuests')} />
+                                    </label>
+                                    <label className={styles.field}>
+                                        <span>Beds</span>
+                                        <input type="number" min="0" value={roomType.beds} onChange={updateRoomType(roomType.id, 'beds')} />
+                                    </label>
+                                    <label className={styles.field}>
+                                        <span>Description</span>
+                                        <textarea value={roomType.description} onChange={updateRoomType(roomType.id, 'description')} rows={3} placeholder="What makes this room special?" />
+                                    </label>
+                                    <label className={styles.field}>
+                                        <span>Room photos</span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            onChange={handleRoomTypePhotosChange(roomType.id)}
+                                        />
+                                        <small className={styles.helperText}>
+                                            Upload photos for this room type. They will be shown when guests choose the room.
+                                        </small>
+                                    </label>
+                                </div>
+                                {(roomType.photoUrls.length > 0 || roomType.photoFiles.length > 0) && (
+                                    <div className={styles.roomTypePhotoPreview}>
+                                        {roomType.photoUrls.map((src, photoIndex) => (
+                                            <figure key={`${roomType.id}-${src}-${photoIndex}`} className={styles.roomTypePhotoCard}>
+                                                <img src={src} alt={roomType.name} className={styles.roomTypePhotoImage} />
+                                                <figcaption>Photo {photoIndex + 1}</figcaption>
+                                            </figure>
+                                        ))}
+                                        {roomType.photoFiles.length > 0 && (
+                                            <div className={styles.roomTypePhotoFiles}>
+                                                {roomType.photoFiles.map((file, fileIndex) => (
+                                                    <span key={`${roomType.id}-${file.name}-${fileIndex}`} className={styles.roomTypePhotoFile}>
+                                                        {file.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                <div className={styles.roomTypeFooter}>
+                                    <span className={styles.roomTypeIndex}>Room type {index + 1}</span>
+                                    <button type="button" className={styles.roomTypeRemove} onClick={() => removeRoomType(roomType.id)}>
+                                        <Trash2 size={16} /> Remove
+                                    </button>
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                </section>
 
                 <div className={styles.grid}>
                     <label className={styles.field}>

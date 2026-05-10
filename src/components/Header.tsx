@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import styles from './Header.module.css';
 import { Search, Globe, Menu, UserCircle, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -9,10 +9,6 @@ export const Header: React.FC = () => {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-    useEffect(() => {
-        setSearchTerm(searchParams.get('q') || '');
-    }, [searchParams]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -103,6 +99,9 @@ export const Header: React.FC = () => {
 
             {/* User Menu */}
             <div className={styles.userMenu}>
+                <a href="/trips" className={styles.hostLink} onClick={(e) => { e.preventDefault(); navigate('/trips'); }}>
+                    Trips
+                </a>
                 <a href="/favorites" className={styles.hostLink} onClick={(e) => { e.preventDefault(); navigate('/favorites'); }}>
                     Favorites
                 </a>
@@ -139,6 +138,9 @@ export const Header: React.FC = () => {
                         onClick={() => setIsMenuOpen(false)}
                     />
                     <div className={styles.mobileMenuPanel} role="menu" aria-label="Mobile navigation">
+                        <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/trips')}>
+                            Trips
+                        </button>
                         <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/favorites')}>
                             Favorites
                         </button>

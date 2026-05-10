@@ -22,7 +22,7 @@ export const authService = {
         return supabase.auth.signInWithPassword({ email, password });
     },
 
-    signUp: async (email: string, password: string, fullName: string) => {
+    signUp: async (email: string, password: string, fullName: string, role: 'guest' | 'host' = 'host') => {
         if (!supabase) {
             throw new Error('Supabase is not configured');
         }
@@ -33,7 +33,7 @@ export const authService = {
             options: {
                 data: {
                     full_name: fullName,
-                    role: 'host',
+                    role,
                 },
             },
         });

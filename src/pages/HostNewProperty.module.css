@@ -113,6 +113,125 @@
     word-break: break-word;
 }
 
+.roomTypeSection {
+    border-top: 1px solid var(--color-gray-100);
+    padding-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.roomTypeHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.roomTypeHeader h2 {
+    font-size: var(--font-size-lg);
+    margin-bottom: 6px;
+}
+
+.roomTypeHeader p {
+    color: var(--text-secondary);
+}
+
+.roomTypeList {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.roomTypeCard {
+    border: 1px solid var(--color-gray-100);
+    border-radius: 24px;
+    padding: 18px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 247, 247, 0.95));
+    box-shadow: var(--shadow-sm);
+}
+
+.roomTypeGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.roomTypeGrid .field textarea {
+    min-height: 88px;
+}
+
+.roomTypeFooter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.roomTypeIndex {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+}
+
+.roomTypeRemove {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #8a2132;
+    padding: 10px 12px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 56, 92, 0.08);
+}
+
+.roomTypeRemove:hover {
+    background: rgba(255, 56, 92, 0.12);
+}
+
+.roomTypePhotoPreview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.roomTypePhotoCard {
+    width: 120px;
+    margin: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--color-gray-100);
+    background: white;
+}
+
+.roomTypePhotoImage {
+    display: block;
+    width: 100%;
+    height: 84px;
+    object-fit: cover;
+}
+
+.roomTypePhotoCard figcaption,
+.roomTypePhotoFile {
+    display: block;
+    padding: 8px;
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.roomTypePhotoFiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.roomTypePhotoFile {
+    border-radius: var(--radius-full);
+    background: rgba(0, 132, 137, 0.08);
+    color: var(--color-primary);
+}
+
 .availabilitySection {
     border-top: 1px solid var(--color-gray-100);
     padding-top: 8px;
@@ -286,6 +405,16 @@
     }
 
     .availabilityForm {
+        grid-template-columns: 1fr;
+    }
+
+    .roomTypeHeader,
+    .roomTypeFooter {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .roomTypeGrid {
         grid-template-columns: 1fr;
     }
 

@@ -8,6 +8,9 @@ import type {
     UpdateListingInput,
     AvailabilityBlock,
     AvailabilityBlockStatus,
+    Booking,
+    BookingHistoryItem,
+    RoomType,
 } from '../types';
 import { supabase } from './supabase';
 
@@ -44,6 +47,7 @@ type SupabaseListingRow = {
     beds: number | null;
     baths: number | null;
     is_active: boolean;
+    room_types: unknown | null;
     category: JoinedEntity<{
         id: string;
         slug: string;
@@ -77,6 +81,33 @@ type SupabaseAvailabilityBlockRow = {
     reason: string | null;
 };
 
+type SupabaseBookingRow = {
+    id: string;
+    listing_id: string;
+    guest_id: string;
+    check_in: string;
+    check_out: string;
+    guest_count: number;
+    room_type_name: string | null;
+    room_type_price: number | string | null;
+    room_count: number | null;
+    subtotal: string | number;
+    fees: string | number;
+    taxes: string | number;
+    total: string | number;
+    status: Booking['status'];
+    created_at: string;
+    listing: JoinedEntity<{
+        id: string;
+        title: string;
+        city: string;
+        country: string;
+        price_per_night: number;
+        currency: string;
+        listing_images: Array<{ image_url: string; sort_order: number | null }> | null;
+    }>;
+};
+
 const LISTING_SELECT = `
     host_id,
     id,
@@ -89,6 +120,7 @@ const LISTING_SELECT = `
     review_count,
     is_guest_favorite,
     availability_summary,
+    room_types,
     city,
     country,
     lat,
@@ -131,6 +163,71 @@ const first = <T,>(value: JoinedEntity<T>): T | null => {
     return value;
 };
 
+const normalizeRoomTypes = (value: unknown): RoomType[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((item, index): RoomType | null => {
+            if (!item || typeof item !== 'object') {
+                return null;
+            }
+
+            const record = item as Record<string, unknown>;
+            const name = typeof record.name === 'string' ? record.name.trim() : '';
+            const pricePerNight = Number(record.pricePerNight ?? record.price_per_night ?? 0);
+            const totalCount = Number(record.totalCount ?? record.total_count ?? 0);
+
+            if (!name || !Number.isFinite(pricePerNight) || pricePerNight <= 0 || !Number.isFinite(totalCount) || totalCount <= 0) {
+                return null;
+            }
+
+            const roomType: RoomType = {
+                id: typeof record.id === 'string' && record.id ? record.id : `${index}-${name.toLowerCase().replace(/\s+/g, '-')}`,
+                name,
+                pricePerNight,
+                totalCount,
+            };
+
+            const maxGuests = Number(record.maxGuests ?? record.max_guests);
+            if (Number.isFinite(maxGuests)) {
+                roomType.maxGuests = maxGuests;
+            }
+
+            const beds = Number(record.beds);
+            if (Number.isFinite(beds)) {
+                roomType.beds = beds;
+            }
+
+            if (typeof record.description === 'string' && record.description.trim()) {
+                roomType.description = record.description.trim();
+            }
+
+            const photos = Array.isArray(record.photos)
+                ? record.photos.filter((photo): photo is string => typeof photo === 'string' && photo.trim().length > 0)
+                : [];
+            if (photos.length > 0) {
+                roomType.photos = photos;
+            }
+
+            return roomType;
+        })
+        .filter((item): item is RoomType => item !== null);
+};
+
+const serializeRoomTypes = (roomTypes: RoomType[]) =>
+    roomTypes.map((roomType) => ({
+        id: roomType.id,
+        name: roomType.name,
+        pricePerNight: roomType.pricePerNight,
+        totalCount: roomType.totalCount,
+        maxGuests: roomType.maxGuests ?? null,
+        beds: roomType.beds ?? null,
+        description: roomType.description ?? null,
+        photos: roomType.photos ?? [],
+    }));
+
 const mapListing = (row: SupabaseListingRow): Listing => {
     const category = first(row.category);
     const host = first(row.host);
@@ -142,6 +239,7 @@ const mapListing = (row: SupabaseListingRow): Listing => {
     const amenities = (row.listing_amenities ?? [])
         .map((entry) => entry.amenity?.label)
         .filter((label): label is string => Boolean(label));
+    const roomTypes = normalizeRoomTypes(row.room_types);
 
     return {
         id: row.id,
@@ -177,6 +275,7 @@ const mapListing = (row: SupabaseListingRow): Listing => {
         beds: row.beds ?? undefined,
         baths: row.baths ?? undefined,
         availabilitySummary: row.availability_summary ?? undefined,
+        roomTypes,
         mapLink: row.map_link ?? undefined,
     };
 };
@@ -192,6 +291,40 @@ const mapAvailabilityBlock = (row: SupabaseAvailabilityBlockRow): AvailabilityBl
         endDate: row.end_date,
         status,
         reason: row.reason ?? undefined,
+    };
+};
+
+const mapBooking = (row: SupabaseBookingRow): BookingHistoryItem => {
+    const listing = first(row.listing);
+    const imageUrl = (listing?.listing_images ?? [])
+        .slice()
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0]?.image_url;
+
+    return {
+        id: row.id,
+        listingId: row.listing_id,
+        guestId: row.guest_id,
+        checkIn: row.check_in,
+        checkOut: row.check_out,
+        guestCount: row.guest_count,
+        roomTypeName: row.room_type_name ?? undefined,
+        roomTypePrice: row.room_type_price != null ? Number(row.room_type_price) : undefined,
+        roomCount: row.room_count ?? undefined,
+        subtotal: Number(row.subtotal),
+        fees: Number(row.fees),
+        taxes: Number(row.taxes),
+        total: Number(row.total),
+        status: row.status,
+        createdAt: row.created_at,
+        listing: {
+            id: listing?.id ?? row.listing_id,
+            title: listing?.title ?? 'Listing',
+            city: listing?.city ?? '',
+            country: listing?.country ?? '',
+            price: listing?.price_per_night ?? 0,
+            currency: listing?.currency ?? 'INR',
+            imageUrl,
+        },
     };
 };
 
@@ -370,6 +503,52 @@ const fetchSupabaseAvailabilityBlocks = async (listingId: string): Promise<Avail
     return (data as SupabaseAvailabilityBlockRow[]).map(mapAvailabilityBlock);
 };
 
+const fetchSupabaseGuestBookings = async (guestId: string): Promise<BookingHistoryItem[]> => {
+    if (!supabase) {
+        return [];
+    }
+
+    const { data, error } = await supabase
+        .from('bookings')
+        .select(`
+            id,
+            listing_id,
+            guest_id,
+            check_in,
+            check_out,
+            guest_count,
+            room_type_name,
+            room_type_price,
+            room_count,
+            subtotal,
+            fees,
+            taxes,
+            total,
+            status,
+            created_at,
+            listing:listings (
+                id,
+                title,
+                city,
+                country,
+                price_per_night,
+                currency,
+                listing_images (
+                    image_url,
+                    sort_order
+                )
+            )
+        `)
+        .eq('guest_id', guestId)
+        .order('created_at', { ascending: false });
+
+    if (error || !data) {
+        return [];
+    }
+
+    return (data as unknown as SupabaseBookingRow[]).map(mapBooking);
+};
+
 const resolveCategoryRow = async (slug: string): Promise<{ id: string; slug: string; label: string; icon_name: string } | null> => {
     if (!supabase || !slug) {
         return null;
@@ -447,6 +626,13 @@ const persistListingAmenities = async (listingId: string, amenityLabels: string[
     }
 };
 
+const bookingStatusLabel: Record<Booking['status'], Booking['status']> = {
+    pending: 'pending',
+    confirmed: 'confirmed',
+    cancelled: 'cancelled',
+    completed: 'completed',
+};
+
 export const api = {
     fetchCategories: (): Promise<CategoriesResponse> => {
         return new Promise((resolve) => {
@@ -482,6 +668,16 @@ export const api = {
         return new Promise((resolve) => {
             setTimeout(() => {
                 fetchSupabaseAvailabilityBlocks(listingId)
+                    .then(resolve)
+                    .catch(() => resolve([]));
+            }, DELAY_MS);
+        });
+    },
+
+    fetchGuestBookings: (guestId: string): Promise<BookingHistoryItem[]> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                fetchSupabaseGuestBookings(guestId)
                     .then(resolve)
                     .catch(() => resolve([]));
             }, DELAY_MS);
@@ -536,6 +732,7 @@ export const api = {
                 baths: input.baths,
                 is_guest_favorite: input.isGuestFavorite ?? false,
                 availability_summary: input.availabilitySummary ?? null,
+                room_types: serializeRoomTypes(input.roomTypes),
             })
             .select(LISTING_SELECT)
             .single();
@@ -578,6 +775,7 @@ export const api = {
                 beds: input.beds,
                 baths: input.baths,
                 availability_summary: input.availabilitySummary ?? null,
+                room_types: serializeRoomTypes(input.roomTypes),
                 host_id: hostId,
             })
             .eq('id', listingId)
@@ -652,5 +850,81 @@ export const api = {
         if (error) {
             throw error;
         }
+    },
+
+    createBooking: async (
+        guestId: string,
+        input: {
+            listingId: string;
+            checkIn: string;
+            checkOut: string;
+            guestCount: number;
+            roomTypeName?: string;
+            roomTypePrice?: number;
+            roomCount?: number;
+            subtotal: number;
+            fees: number;
+            taxes: number;
+            total: number;
+            status: Booking['status'];
+        }
+    ): Promise<BookingHistoryItem> => {
+        if (!supabase) {
+            throw new Error('Supabase is not configured');
+        }
+
+        const { data, error } = await supabase
+            .from('bookings')
+            .insert({
+                listing_id: input.listingId,
+                guest_id: guestId,
+                check_in: input.checkIn,
+                check_out: input.checkOut,
+                guest_count: input.guestCount,
+                room_type_name: input.roomTypeName ?? null,
+                room_type_price: input.roomTypePrice ?? null,
+                room_count: input.roomCount ?? 1,
+                subtotal: input.subtotal,
+                fees: input.fees,
+                taxes: input.taxes,
+                total: input.total,
+                status: bookingStatusLabel[input.status],
+            })
+            .select(`
+                id,
+                listing_id,
+                guest_id,
+                check_in,
+                check_out,
+                guest_count,
+                room_type_name,
+                room_type_price,
+                room_count,
+                subtotal,
+                fees,
+                taxes,
+                total,
+                status,
+                created_at,
+                listing:listings (
+                    id,
+                    title,
+                    city,
+                    country,
+                    price_per_night,
+                    currency,
+                    listing_images (
+                        image_url,
+                        sort_order
+                    )
+                )
+            `)
+            .single();
+
+        if (error || !data) {
+            throw error ?? new Error('Unable to create booking');
+        }
+
+        return mapBooking(data as unknown as SupabaseBookingRow);
     },
 };

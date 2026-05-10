@@ -5,8 +5,10 @@ import { Home } from './pages/Home';
 import { ListingDetails } from './pages/ListingDetails';
 import { Favorites } from './pages/Favorites';
 import { HostAuth } from './pages/HostAuth';
+import { GuestAuth } from './pages/GuestAuth';
 import { HostDashboard } from './pages/HostDashboard';
 import { HostNewProperty } from './pages/HostNewProperty';
+import { Trips } from './pages/Trips';
 import './styles/global.css';
 
 function App() {
@@ -17,6 +19,9 @@ function App() {
           <Route index element={<Home />} />
           <Route path="rooms/:id" element={<ListingDetails />} />
           <Route path="favorites" element={<Favorites />} />
+          <Route path="trips" element={<Trips />} />
+          <Route path="bookings" element={<Trips />} />
+          <Route path="guest/auth" element={<GuestAuth />} />
         </Route>
         <Route path="/host" element={<HostLayout />}>
           <Route index element={<HostDashboard />} />

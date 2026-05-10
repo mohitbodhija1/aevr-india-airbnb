@@ -59,6 +59,7 @@ const ListingSummaryCard = ({
             <div className={styles.metaRow}>
                 <span><Star size={14} fill="currentColor" /> {listing.rating}</span>
                 <span><Users size={14} /> {listing.guestCountMax ?? 1} guests</span>
+                <span><Sparkles size={14} /> {(listing.roomTypes?.length ?? 1)} room types</span>
                 <span><BedDouble size={14} /> {listing.bedrooms ?? 1} bedrooms</span>
                 <span><Bath size={14} /> {listing.baths ?? 1} baths</span>
             </div>

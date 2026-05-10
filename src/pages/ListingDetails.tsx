@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ElementType } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type ElementType } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
     Star,
     Heart,
@@ -25,8 +25,9 @@ import {
 } from 'lucide-react';
 import styles from './ListingDetails.module.css';
 import { api } from '../services/api';
+import { authService } from '../services/auth';
 import { favoritesService } from '../services/favorites';
-import type { AvailabilityBlock, Listing } from '../types';
+import type { AvailabilityBlock, Listing, RoomType } from '../types';
 
 const amenityIcons: Record<string, ElementType> = {
     wifi: Wifi,
@@ -95,7 +96,78 @@ const formatDateRange = (startDate: string, endDate: string) => {
     return `${start} - ${end}`;
 };
 
+const fallbackRoomTypes = (listing?: Listing): RoomType[] => {
+    if (!listing) {
+        return [];
+    }
+
+    if (listing.roomTypes && listing.roomTypes.length > 0) {
+        return listing.roomTypes;
+    }
+
+    return [
+        {
+            id: 'default-room',
+            name: 'Standard stay',
+            pricePerNight: listing.price,
+            totalCount: 1,
+            maxGuests: listing.guestCountMax ?? undefined,
+            beds: listing.beds ?? undefined,
+            description: 'The default room option for this property.',
+        },
+    ];
+};
+
+const PENDING_BOOKING_KEY = 'aevr.pending-booking';
+
+type PendingBooking = {
+    listingId: string;
+    checkIn: string;
+    checkOut: string;
+    guestCount: number;
+    roomTypeName: string;
+    roomTypePrice: number;
+    roomCount: number;
+    mode: 'reserve' | 'request';
+};
+
+const readPendingBooking = (): PendingBooking | null => {
+    try {
+        const stored = sessionStorage.getItem(PENDING_BOOKING_KEY);
+        if (!stored) {
+            return null;
+        }
+
+        const parsed = JSON.parse(stored) as Partial<PendingBooking>;
+        if (!parsed?.listingId || !parsed?.checkIn || !parsed?.checkOut || !parsed?.guestCount || !parsed?.mode) {
+            return null;
+        }
+
+        return {
+            listingId: parsed.listingId,
+            checkIn: parsed.checkIn,
+            checkOut: parsed.checkOut,
+            guestCount: parsed.guestCount,
+            roomTypeName: typeof parsed.roomTypeName === 'string' && parsed.roomTypeName.trim() ? parsed.roomTypeName : 'Standard stay',
+            roomTypePrice: Number.isFinite(Number(parsed.roomTypePrice)) && Number(parsed.roomTypePrice) > 0 ? Number(parsed.roomTypePrice) : 0,
+            roomCount: Number.isFinite(Number(parsed.roomCount)) && Number(parsed.roomCount) > 0 ? Number(parsed.roomCount) : 1,
+            mode: parsed.mode,
+        };
+    } catch {
+        return null;
+    }
+};
+
+const savePendingBooking = (booking: PendingBooking) => {
+    sessionStorage.setItem(PENDING_BOOKING_KEY, JSON.stringify(booking));
+};
+
+const clearPendingBooking = () => {
+    sessionStorage.removeItem(PENDING_BOOKING_KEY);
+};
+
 export const ListingDetails = () => {
+    const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const [listing, setListing] = useState<Listing | undefined>(undefined);
     const [loading, setLoading] = useState(true);
@@ -104,6 +176,8 @@ export const ListingDetails = () => {
     const [bookingStatus, setBookingStatus] = useState<'reserved' | 'requested' | null>(null);
     const [bookingError, setBookingError] = useState<string | null>(null);
     const [bookingMode, setBookingMode] = useState<'reserve' | 'request'>('reserve');
+    const [submittingBooking, setSubmittingBooking] = useState(false);
+    const autoSubmitHandled = useRef(false);
 
     const [checkIn, setCheckIn] = useState(() => {
         const tomorrow = new Date();
@@ -118,6 +192,8 @@ export const ListingDetails = () => {
         return dateToInput(nextWeek);
     });
     const [guestCount, setGuestCount] = useState(1);
+    const [selectedRoomTypeId, setSelectedRoomTypeId] = useState('');
+    const [roomCount, setRoomCount] = useState(1);
 
     useEffect(() => {
         if (!id) return;
@@ -135,11 +211,33 @@ export const ListingDetails = () => {
         load();
     }, [id]);
 
+    const roomTypes = useMemo(() => fallbackRoomTypes(listing), [listing]);
+    const selectedRoomType = useMemo(
+        () => roomTypes.find((roomType) => roomType.id === selectedRoomTypeId) ?? roomTypes[0] ?? null,
+        [roomTypes, selectedRoomTypeId]
+    );
+
     useEffect(() => {
-        if (!listing) return;
-        const guestLimit = listing.guestCountMax ?? 10;
-        setGuestCount((current) => Math.min(current, guestLimit));
-    }, [listing]);
+        if (roomTypes.length === 0) {
+            return;
+        }
+
+        setSelectedRoomTypeId((current) => {
+            if (roomTypes.some((roomType) => roomType.id === current)) {
+                return current;
+            }
+
+            return roomTypes[0].id;
+        });
+    }, [roomTypes]);
+
+    useEffect(() => {
+        if (!selectedRoomType) {
+            return;
+        }
+
+        setRoomCount((current) => Math.min(Math.max(current, 1), selectedRoomType.totalCount));
+    }, [selectedRoomType]);
 
     useEffect(() => {
         if (checkOut <= checkIn) {
@@ -147,14 +245,25 @@ export const ListingDetails = () => {
         }
     }, [checkIn, checkOut]);
 
-    const guestLimit = listing?.guestCountMax ?? 10;
+    const guestLimit = selectedRoomType?.maxGuests
+        ? Math.max(selectedRoomType.maxGuests * roomCount, 1)
+        : listing?.guestCountMax ?? 10;
+
+    useEffect(() => {
+        setGuestCount((current) => Math.min(current, guestLimit));
+    }, [guestLimit]);
+
     const nights = useMemo(() => nightsBetween(checkIn, checkOut), [checkIn, checkOut]);
-    const subtotal = listing ? listing.price * nights : 0;
-    const cleaningFee = listing ? Math.max(45, Math.round(listing.price * 0.06)) : 0;
+    const nightlyRate = selectedRoomType?.pricePerNight ?? listing?.price ?? 0;
+    const subtotal = listing ? nightlyRate * nights * roomCount : 0;
+    const cleaningFee = listing ? Math.max(45, Math.round(nightlyRate * 0.06)) : 0;
     const serviceFee = listing ? Math.max(35, Math.round(subtotal * 0.12)) : 0;
     const taxes = listing ? Math.round(subtotal * 0.1) : 0;
     const total = subtotal + cleaningFee + serviceFee + taxes;
-    const coverImage = listing?.images[0] ?? 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1200&auto=format&fit=crop';
+    const coverImage =
+        selectedRoomType?.photos?.[0]
+        ?? listing?.images[0]
+        ?? 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1200&auto=format&fit=crop';
 
     const toggleFavorite = () => {
         if (!listing) return;
@@ -162,15 +271,134 @@ export const ListingDetails = () => {
         setIsFavorited(!isFavorited);
     };
 
-    const handleBooking = (mode: 'reserve' | 'request') => {
-        if (!listing) return;
+    const submitBooking = useCallback(
+        async (mode: 'reserve' | 'request', guestId: string, bookingOverride?: PendingBooking) => {
+            if (!listing || !id) return;
+
+            const bookingCheckIn = bookingOverride?.checkIn ?? checkIn;
+            const bookingCheckOut = bookingOverride?.checkOut ?? checkOut;
+            const bookingGuestCount = bookingOverride?.guestCount ?? guestCount;
+            const bookingRoomTypeName = bookingOverride?.roomTypeName ?? selectedRoomType?.name ?? 'Standard stay';
+            const bookingRoomTypePrice =
+                bookingOverride?.roomTypePrice && bookingOverride.roomTypePrice > 0
+                    ? bookingOverride.roomTypePrice
+                    : selectedRoomType?.pricePerNight ?? listing.price;
+            const bookingRoomCount =
+                bookingOverride?.roomCount && bookingOverride.roomCount > 0
+                    ? bookingOverride.roomCount
+                    : roomCount;
+            const bookingNights = nightsBetween(bookingCheckIn, bookingCheckOut);
+
+            if (bookingNights <= 0) {
+                setBookingError('Please choose a valid check-in and checkout date.');
+                return;
+            }
+
+            const blockedRange = availabilityBlocks.find((block) => rangesOverlap(bookingCheckIn, bookingCheckOut, block.startDate, block.endDate));
+            if (blockedRange) {
+                setBookingError(
+                    blockedRange.status === 'restricted'
+                        ? 'Those dates are restricted by the host. Please choose another range.'
+                        : 'Those dates are already booked. Please choose another range.'
+                );
+                return;
+            }
+
+            if (bookingGuestCount < 1 || bookingGuestCount > guestLimit) {
+                setBookingError(`Please choose between 1 and ${guestLimit} guests.`);
+                return;
+            }
+
+            if (!selectedRoomType || bookingRoomCount < 1 || bookingRoomCount > selectedRoomType.totalCount) {
+                setBookingError('Please choose a valid room type and count.');
+                return;
+            }
+
+            const bookingSubtotal = bookingRoomTypePrice * bookingRoomCount * bookingNights;
+            const bookingCleaningFee = Math.max(45, Math.round(bookingRoomTypePrice * 0.06));
+            const bookingServiceFee = Math.max(35, Math.round(bookingSubtotal * 0.12));
+            const bookingTaxes = Math.round(bookingSubtotal * 0.1);
+            const bookingTotal = bookingSubtotal + bookingCleaningFee + bookingServiceFee + bookingTaxes;
+
+            setSubmittingBooking(true);
+
+            try {
+                const booking = await api.createBooking(guestId, {
+                    listingId: id,
+                    checkIn: bookingCheckIn,
+                    checkOut: bookingCheckOut,
+                    guestCount: bookingGuestCount,
+                    roomTypeName: bookingRoomTypeName,
+                    roomTypePrice: bookingRoomTypePrice,
+                    roomCount: bookingRoomCount,
+                    subtotal: bookingSubtotal,
+                    fees: bookingCleaningFee + bookingServiceFee,
+                    taxes: bookingTaxes,
+                    total: bookingTotal,
+                    status: mode === 'reserve' ? 'confirmed' : 'pending',
+                });
+
+                clearPendingBooking();
+                setBookingError(null);
+                setBookingStatus(mode === 'reserve' ? 'reserved' : 'requested');
+                setCheckIn(booking.checkIn);
+                setCheckOut(booking.checkOut);
+                setGuestCount(booking.guestCount);
+            } catch (error) {
+                setBookingError(error instanceof Error ? error.message : 'Unable to place booking');
+            } finally {
+                setSubmittingBooking(false);
+            }
+        },
+        [availabilityBlocks, checkIn, checkOut, guestCount, guestLimit, id, listing, roomCount, selectedRoomType]
+    );
+
+    useEffect(() => {
+        if (!listing || !id || autoSubmitHandled.current) {
+            return;
+        }
+
+        const pendingBooking = readPendingBooking();
+        if (!pendingBooking || pendingBooking.listingId !== id) {
+            return;
+        }
+
+        const continuePendingBooking = async () => {
+            const session = await authService.getSession();
+            if (!session) {
+                return;
+            }
+
+            autoSubmitHandled.current = true;
+            setCheckIn(pendingBooking.checkIn);
+            setCheckOut(pendingBooking.checkOut);
+            setGuestCount(pendingBooking.guestCount);
+            setRoomCount(pendingBooking.roomCount);
+            const pendingRoomType = roomTypes.find((roomType) => roomType.name === pendingBooking.roomTypeName);
+            if (pendingRoomType) {
+                setSelectedRoomTypeId(pendingRoomType.id);
+            }
+            setBookingMode(pendingBooking.mode);
+            clearPendingBooking();
+            await submitBooking(pendingBooking.mode, session.user.id, pendingBooking);
+        };
+
+        continuePendingBooking();
+    }, [id, listing, roomTypes, submitBooking]);
+
+    const handleBooking = async (mode: 'reserve' | 'request') => {
+        if (!listing || !id) return;
+
+        const bookingCheckIn = checkIn;
+        const bookingCheckOut = checkOut;
+        const bookingGuestCount = guestCount;
 
         if (nights <= 0) {
             setBookingError('Please choose a valid check-in and checkout date.');
             return;
         }
 
-        const blockedRange = availabilityBlocks.find((block) => rangesOverlap(checkIn, checkOut, block.startDate, block.endDate));
+        const blockedRange = availabilityBlocks.find((block) => rangesOverlap(bookingCheckIn, bookingCheckOut, block.startDate, block.endDate));
         if (blockedRange) {
             setBookingError(
                 blockedRange.status === 'restricted'
@@ -180,13 +408,28 @@ export const ListingDetails = () => {
             return;
         }
 
-        if (guestCount < 1 || guestCount > guestLimit) {
+        if (bookingGuestCount < 1 || bookingGuestCount > guestLimit) {
             setBookingError(`Please choose between 1 and ${guestLimit} guests.`);
             return;
         }
 
-        setBookingError(null);
-        setBookingStatus(mode === 'reserve' ? 'reserved' : 'requested');
+        const session = await authService.getSession();
+        if (!session) {
+            savePendingBooking({
+                listingId: id,
+                checkIn: bookingCheckIn,
+                checkOut: bookingCheckOut,
+                guestCount: bookingGuestCount,
+                roomTypeName: selectedRoomType?.name ?? 'Standard stay',
+                roomTypePrice: selectedRoomType?.pricePerNight ?? listing.price,
+                roomCount,
+                mode,
+            });
+            navigate(`/guest/auth?next=${encodeURIComponent(`/rooms/${id}`)}&mode=sign-up`);
+            return;
+        }
+
+        await submitBooking(mode, session.user.id);
     };
 
     const bookingHeadline = bookingMode === 'reserve' ? 'Reserve now' : 'Request to book';
@@ -205,6 +448,7 @@ export const ListingDetails = () => {
         listing.bedrooms ? `${listing.bedrooms} bedrooms` : null,
         listing.beds ? `${listing.beds} beds` : null,
         listing.baths ? `${listing.baths} baths` : null,
+        listing.roomTypes?.length ? `${listing.roomTypes.length} room types` : null,
     ].filter((part): part is string => Boolean(part)).join(' · ');
 
     return (
@@ -356,7 +600,7 @@ export const ListingDetails = () => {
                     <div className={styles.bookingCard}>
                         <div className={styles.cardHeader}>
                             <div className={styles.cardPrice}>
-                                {formatPrice(listing.price, listing.currency)} <span>night</span>
+                                {formatPrice(nightlyRate, listing.currency)} <span>/ room / night</span>
                             </div>
                             <div className={styles.cardMeta}>
                                 <Star size={14} fill="currentColor" />
@@ -381,6 +625,10 @@ export const ListingDetails = () => {
                         )}
 
                         <div className={styles.bookingForm}>
+                            <div className={styles.bookingNote}>
+                                Sign in to reserve or request this stay. We’ll save your selection while you log in.
+                            </div>
+
                             <div className={styles.dateGrid}>
                                 <label className={styles.formField}>
                                     <span>Check-in</span>
@@ -401,6 +649,41 @@ export const ListingDetails = () => {
                                     />
                                 </label>
                             </div>
+
+                            <label className={styles.formField}>
+                                <span>Room type</span>
+                                <select value={selectedRoomType?.id ?? ''} onChange={(e) => {
+                                    const roomType = roomTypes.find((item) => item.id === e.target.value);
+                                    if (!roomType) return;
+                                    setSelectedRoomTypeId(roomType.id);
+                                    setRoomCount((current) => Math.min(current, roomType.totalCount));
+                                }}>
+                                    {roomTypes.map((roomType) => (
+                                        <option key={roomType.id} value={roomType.id}>
+                                            {roomType.name} - {formatPrice(roomType.pricePerNight, listing.currency)} / night ({roomType.totalCount} available)
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            {selectedRoomType?.photos && selectedRoomType.photos.length > 0 && (
+                                <div className={styles.roomPhotoStrip}>
+                                    {selectedRoomType.photos.slice(0, 3).map((photo, index) => (
+                                        <img key={`${selectedRoomType.id}-${photo}-${index}`} src={photo} alt={selectedRoomType.name} className={styles.roomPhoto} />
+                                    ))}
+                                </div>
+                            )}
+
+                            <label className={styles.formField}>
+                                <span>Rooms</span>
+                                <select value={roomCount} onChange={(e) => setRoomCount(Number(e.target.value))}>
+                                    {Array.from({ length: selectedRoomType?.totalCount ?? 1 }, (_, index) => index + 1).map((value) => (
+                                        <option key={value} value={value}>
+                                            {value} room{value > 1 ? 's' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
 
                             <label className={styles.formField}>
                                 <span>Guests</span>
@@ -434,9 +717,9 @@ export const ListingDetails = () => {
                                 type="button"
                                 className={styles.reserveButton}
                                 onClick={() => handleBooking(bookingMode)}
-                                disabled={nights <= 0}
+                                disabled={nights <= 0 || submittingBooking}
                             >
-                                {bookingActionLabel}
+                                {submittingBooking ? 'Please wait...' : bookingActionLabel}
                             </button>
 
                             <div className={styles.bookingNote}>
@@ -460,7 +743,9 @@ export const ListingDetails = () => {
 
                         <div className={styles.priceBreakdown}>
                             <div className={styles.breakdownRow}>
-                                <span>{formatPrice(listing.price, listing.currency)} x {nights || 0} nights</span>
+                                <span>
+                                    {roomCount} {selectedRoomType?.name ?? 'room'} x {formatPrice(nightlyRate, listing.currency)} x {nights || 0} nights
+                                </span>
                                 <span>{formatPrice(subtotal, listing.currency)}</span>
                             </div>
                             <div className={styles.breakdownRow}>

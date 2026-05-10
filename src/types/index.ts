@@ -44,8 +44,20 @@ export interface Listing {
     beds?: number;
     baths?: number;
     availabilitySummary?: string;
+    roomTypes?: RoomType[];
     hostId?: string;
     mapLink?: string;
+}
+
+export interface RoomType {
+    id: string;
+    name: string;
+    pricePerNight: number;
+    totalCount: number;
+    maxGuests?: number;
+    beds?: number;
+    description?: string;
+    photos?: string[];
 }
 
 export interface Category {
@@ -98,12 +110,27 @@ export interface Booking {
     checkIn: string;
     checkOut: string;
     guestCount: number;
+    roomTypeName?: string;
+    roomTypePrice?: number;
+    roomCount?: number;
     subtotal: number;
     fees: number;
     taxes: number;
     total: number;
     status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
     createdAt: string;
+}
+
+export interface BookingHistoryItem extends Booking {
+    listing: {
+        id: string;
+        title: string;
+        city: string;
+        country: string;
+        price: number;
+        currency?: string;
+        imageUrl?: string;
+    };
 }
 
 export interface Favorite {
@@ -129,6 +156,7 @@ export interface CreateListingInput {
     baths: number;
     isGuestFavorite?: boolean;
     availabilitySummary?: string;
+    roomTypes: RoomType[];
     imageUrls: string[];
     amenityLabels: string[];
 }
