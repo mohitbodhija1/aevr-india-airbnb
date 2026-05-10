@@ -16,7 +16,7 @@ export const Favorites = () => {
                 // In a real app, we might have an API to fetch by IDs.
                 // Here we'll fetch all and filter client side or add a mock method.
                 // For efficiency, we will fetch all and filter since mock data is small.
-                const allListings = await api.fetchListings();
+                const allListings = await api.fetchListings({});
                 const favoriteIds = favoritesService.getFavorites();
                 const favs = allListings.filter(l => favoriteIds.includes(l.id));
                 setListings(favs);

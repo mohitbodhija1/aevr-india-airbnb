@@ -22,6 +22,7 @@ function App() {
           <Route index element={<HostDashboard />} />
           <Route path="auth" element={<HostAuth />} />
           <Route path="new" element={<HostNewProperty />} />
+          <Route path="edit/:id" element={<HostNewProperty />} />
         </Route>
       </Routes>
     </BrowserRouter>

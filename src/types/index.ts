@@ -55,6 +55,35 @@ export interface Category {
     iconName: string; // Mapped to Lucide icons
 }
 
+export type ListingSortOption = 'recommended' | 'price_asc' | 'price_desc' | 'rating_desc';
+
+export interface ListingFilters {
+    category?: string;
+    search?: string;
+    sort?: ListingSortOption;
+    maxPrice?: number;
+    minPrice?: number;
+    guests?: number;
+    bedrooms?: number;
+    baths?: number;
+    guestFavoriteOnly?: boolean;
+}
+
+export type AvailabilityBlockStatus = 'booked' | 'restricted';
+
+export interface AvailabilityBlock {
+    id: string;
+    listingId: string;
+    startDate: string;
+    endDate: string;
+    status: AvailabilityBlockStatus;
+    reason?: string;
+}
+
+export interface UpdateListingInput extends Omit<CreateListingInput, 'imageUrls'> {
+    imageUrls?: string[];
+}
+
 export interface Amenity {
     id: string;
     slug: string;

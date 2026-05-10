@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Home, Plus, LogOut, Star, MapPin, BedDouble, Bath, Users, Sparkles } from 'lucide-react';
+import { Home, Plus, LogOut, Star, MapPin, BedDouble, Bath, Users, Sparkles, Pencil, Trash2, CalendarDays } from 'lucide-react';
 import styles from './HostDashboard.module.css';
 import { authService } from '../services/auth';
 import { api } from '../services/api';
@@ -27,7 +27,17 @@ const getUserDisplayName = (user: SessionUser | null) => {
     return fullName ?? name ?? user?.email ?? 'Host';
 };
 
-const ListingSummaryCard = ({ listing }: { listing: Listing }) => (
+const ListingSummaryCard = ({
+    listing,
+    onEdit,
+    onDelete,
+    isBusy,
+}: {
+    listing: Listing;
+    onEdit: (listingId: string) => void;
+    onDelete: (listingId: string) => void;
+    isBusy: boolean;
+}) => (
     <article className={styles.propertyCard}>
         <Link to={`/rooms/${listing.id}`} className={styles.propertyImageWrap}>
             <img
@@ -73,9 +83,17 @@ const ListingSummaryCard = ({ listing }: { listing: Listing }) => (
                 <div className={styles.location}>
                     <MapPin size={14} /> {listing.availableDates}
                 </div>
-                <Link to={`/rooms/${listing.id}`} className={styles.viewLink}>
-                    View listing
-                </Link>
+                <div className={styles.cardActions}>
+                    <Link to={`/host/edit/${listing.id}#availability`} className={styles.actionPill}>
+                        <CalendarDays size={14} /> Calendar
+                    </Link>
+                    <button type="button" className={styles.actionPill} onClick={() => onEdit(listing.id)}>
+                        <Pencil size={14} /> Edit
+                    </button>
+                    <button type="button" className={styles.deletePill} onClick={() => onDelete(listing.id)} disabled={isBusy}>
+                        <Trash2 size={14} /> Delete
+                    </button>
+                </div>
             </div>
         </div>
     </article>
@@ -87,6 +105,7 @@ export const HostDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [listings, setListings] = useState<Listing[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [busyListingId, setBusyListingId] = useState<string | null>(null);
 
     useEffect(() => {
         const load = async () => {
@@ -114,6 +133,31 @@ export const HostDashboard = () => {
     const handleSignOut = async () => {
         await authService.signOut();
         navigate('/host/auth', { replace: true });
+    };
+
+    const refreshListings = async () => {
+        if (!sessionUser) return;
+        const data = await api.fetchHostListings(sessionUser.id);
+        setListings(data);
+    };
+
+    const handleEdit = (listingId: string) => {
+        navigate(`/host/edit/${listingId}`);
+    };
+
+    const handleDelete = async (listingId: string) => {
+        if (!sessionUser) return;
+        if (!window.confirm('Delete this listing? It will be hidden from guests.')) {
+            return;
+        }
+
+        setBusyListingId(listingId);
+        try {
+            await api.deleteListing(sessionUser.id, listingId);
+            await refreshListings();
+        } finally {
+            setBusyListingId(null);
+        }
     };
 
     if (loading) {
@@ -177,7 +221,13 @@ export const HostDashboard = () => {
                 {listings.length > 0 ? (
                     <div className={styles.listingsGrid}>
                         {listings.map((listing) => (
-                            <ListingSummaryCard key={listing.id} listing={listing} />
+                            <ListingSummaryCard
+                                key={listing.id}
+                                listing={listing}
+                                onEdit={handleEdit}
+                                onDelete={handleDelete}
+                                isBusy={busyListingId === listing.id}
+                            />
                         ))}
                     </div>
                 ) : (

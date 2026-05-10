@@ -26,7 +26,7 @@ import {
 import styles from './ListingDetails.module.css';
 import { api } from '../services/api';
 import { favoritesService } from '../services/favorites';
-import type { Listing } from '../types';
+import type { AvailabilityBlock, Listing } from '../types';
 
 const amenityIcons: Record<string, ElementType> = {
     wifi: Wifi,
@@ -59,23 +59,63 @@ const formatPrice = (amount: number, currency?: string) =>
         maximumFractionDigits: 0,
     }).format(amount);
 
+const dateToInput = (date: Date) => date.toISOString().slice(0, 10);
+
+const parseInputDate = (value: string) => {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day));
+};
+
+const addDays = (value: string, days: number) => {
+    const date = parseInputDate(value);
+    date.setUTCDate(date.getUTCDate() + days);
+    return dateToInput(date);
+};
+
+const nightsBetween = (checkIn: string, checkOut: string) => {
+    if (!checkIn || !checkOut) return 0;
+    const start = parseInputDate(checkIn).getTime();
+    const end = parseInputDate(checkOut).getTime();
+    const nights = Math.round((end - start) / (1000 * 60 * 60 * 24));
+    return nights > 0 ? nights : 0;
+};
+
+const rangesOverlap = (startA: string, endA: string, startB: string, endB: string) => {
+    const start1 = parseInputDate(startA).getTime();
+    const end1 = parseInputDate(endA).getTime();
+    const start2 = parseInputDate(startB).getTime();
+    const end2 = parseInputDate(endB).getTime();
+    return start1 < end2 && start2 < end1;
+};
+
+const formatDateRange = (startDate: string, endDate: string) => {
+    const formatter = new Intl.DateTimeFormat('en-IN', { month: 'short', day: 'numeric' });
+    const start = formatter.format(new Date(`${startDate}T00:00:00Z`));
+    const end = formatter.format(new Date(`${endDate}T00:00:00Z`));
+    return `${start} - ${end}`;
+};
+
 export const ListingDetails = () => {
     const { id } = useParams<{ id: string }>();
     const [listing, setListing] = useState<Listing | undefined>(undefined);
     const [loading, setLoading] = useState(true);
     const [isFavorited, setIsFavorited] = useState(false);
+    const [availabilityBlocks, setAvailabilityBlocks] = useState<AvailabilityBlock[]>([]);
+    const [bookingStatus, setBookingStatus] = useState<'reserved' | 'requested' | null>(null);
+    const [bookingError, setBookingError] = useState<string | null>(null);
+    const [bookingMode, setBookingMode] = useState<'reserve' | 'request'>('reserve');
 
     const [checkIn, setCheckIn] = useState(() => {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        return tomorrow.toISOString().split('T')[0];
+        return dateToInput(tomorrow);
     });
     const [checkOut, setCheckOut] = useState(() => {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const nextWeek = new Date(tomorrow);
-        nextWeek.setDate(nextWeek.getDate() + 5);
-        return nextWeek.toISOString().split('T')[0];
+        nextWeek.setDate(nextWeek.getDate() + 4);
+        return dateToInput(nextWeek);
     });
     const [guestCount, setGuestCount] = useState(1);
 
@@ -85,7 +125,9 @@ export const ListingDetails = () => {
         const load = async () => {
             setLoading(true);
             const data = await api.fetchListingById(id);
+            const blocks = await api.fetchAvailabilityBlocks(id);
             setListing(data);
+            setAvailabilityBlocks(blocks);
             setIsFavorited(favoritesService.isFavorite(id));
             setLoading(false);
         };
@@ -93,19 +135,25 @@ export const ListingDetails = () => {
         load();
     }, [id]);
 
-    const nights = useMemo(() => {
-        if (!checkIn || !checkOut) return 0;
-        const start = new Date(checkIn);
-        const end = new Date(checkOut);
-        const timeDiff = end.getTime() - start.getTime();
-        const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
-        return days > 0 ? days : 0;
+    useEffect(() => {
+        if (!listing) return;
+        const guestLimit = listing.guestCountMax ?? 10;
+        setGuestCount((current) => Math.min(current, guestLimit));
+    }, [listing]);
+
+    useEffect(() => {
+        if (checkOut <= checkIn) {
+            setCheckOut(addDays(checkIn, 1));
+        }
     }, [checkIn, checkOut]);
 
+    const guestLimit = listing?.guestCountMax ?? 10;
+    const nights = useMemo(() => nightsBetween(checkIn, checkOut), [checkIn, checkOut]);
     const subtotal = listing ? listing.price * nights : 0;
-    const cleaningFee = 60;
-    const serviceFee = 80;
-    const total = subtotal + cleaningFee + serviceFee;
+    const cleaningFee = listing ? Math.max(45, Math.round(listing.price * 0.06)) : 0;
+    const serviceFee = listing ? Math.max(35, Math.round(subtotal * 0.12)) : 0;
+    const taxes = listing ? Math.round(subtotal * 0.1) : 0;
+    const total = subtotal + cleaningFee + serviceFee + taxes;
     const coverImage = listing?.images[0] ?? 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1200&auto=format&fit=crop';
 
     const toggleFavorite = () => {
@@ -114,11 +162,35 @@ export const ListingDetails = () => {
         setIsFavorited(!isFavorited);
     };
 
-    const handleReserve = () => {
-        alert(
-            `Reservation confirmed!\n\nListing: ${listing?.title}\nDates: ${checkIn} to ${checkOut}\nGuests: ${guestCount}\nTotal: ${formatPrice(total, listing?.currency)}`
-        );
+    const handleBooking = (mode: 'reserve' | 'request') => {
+        if (!listing) return;
+
+        if (nights <= 0) {
+            setBookingError('Please choose a valid check-in and checkout date.');
+            return;
+        }
+
+        const blockedRange = availabilityBlocks.find((block) => rangesOverlap(checkIn, checkOut, block.startDate, block.endDate));
+        if (blockedRange) {
+            setBookingError(
+                blockedRange.status === 'restricted'
+                    ? 'Those dates are restricted by the host. Please choose another range.'
+                    : 'Those dates are already booked. Please choose another range.'
+            );
+            return;
+        }
+
+        if (guestCount < 1 || guestCount > guestLimit) {
+            setBookingError(`Please choose between 1 and ${guestLimit} guests.`);
+            return;
+        }
+
+        setBookingError(null);
+        setBookingStatus(mode === 'reserve' ? 'reserved' : 'requested');
     };
+
+    const bookingHeadline = bookingMode === 'reserve' ? 'Reserve now' : 'Request to book';
+    const bookingActionLabel = bookingMode === 'reserve' ? 'Reserve' : 'Request to book';
 
     if (loading) {
         return <div className={styles.container} style={{ height: '80vh' }} />;
@@ -128,7 +200,6 @@ export const ListingDetails = () => {
         return <div className={styles.container}>Listing not found</div>;
     }
 
-    const guestLimit = listing.guestCountMax ?? 10;
     const listingSummary = [
         listing.guestCountMax ? `${listing.guestCountMax} guests` : null,
         listing.bedrooms ? `${listing.bedrooms} bedrooms` : null,
@@ -285,87 +356,130 @@ export const ListingDetails = () => {
                     <div className={styles.bookingCard}>
                         <div className={styles.cardHeader}>
                             <div className={styles.cardPrice}>
-                                {formatPrice(listing.price, listing.currency)} <span style={{ fontSize: '1rem', fontWeight: 400 }}>night</span>
+                                {formatPrice(listing.price, listing.currency)} <span>night</span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.875rem' }}>
+                            <div className={styles.cardMeta}>
                                 <Star size={14} fill="currentColor" />
-                                <span style={{ fontWeight: 600 }}>{listing.rating}</span>
-                                <span style={{ color: 'var(--text-secondary)' }}>·</span>
-                                <span style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>{listing.reviewCount} reviews</span>
+                                <span>{listing.rating}</span>
+                                <span>·</span>
+                                <span>{listing.reviewCount} reviews</span>
                             </div>
                         </div>
 
-                        <div style={{
-                            border: '1px solid var(--color-gray-400)',
-                            borderRadius: '8px',
-                            marginBottom: '16px',
-                            overflow: 'hidden'
-                        }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid var(--color-gray-400)' }}>
-                                <div style={{ padding: '10px 12px', borderRight: '1px solid var(--color-gray-400)', position: 'relative' }}>
-                                    <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }}>Check-in</div>
+                        {bookingStatus && (
+                            <div className={`${styles.statusBanner} ${bookingStatus === 'reserved' ? styles.statusSuccess : styles.statusInfo}`}>
+                                {bookingStatus === 'reserved'
+                                    ? 'Reservation placed. You can follow up from this screen later.'
+                                    : 'Request sent. The host can review your dates and get back to you.'}
+                            </div>
+                        )}
+
+                        {bookingError && (
+                            <div className={styles.statusBanner}>
+                                {bookingError}
+                            </div>
+                        )}
+
+                        <div className={styles.bookingForm}>
+                            <div className={styles.dateGrid}>
+                                <label className={styles.formField}>
+                                    <span>Check-in</span>
                                     <input
                                         type="date"
                                         value={checkIn}
+                                        min={dateToInput(new Date())}
                                         onChange={(e) => setCheckIn(e.target.value)}
-                                        style={{ border: 'none', outline: 'none', width: '100%', fontSize: '14px', fontFamily: 'inherit', color: 'var(--text-primary)' }}
                                     />
-                                </div>
-                                <div style={{ padding: '10px 12px' }}>
-                                    <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }}>Checkout</div>
+                                </label>
+                                <label className={styles.formField}>
+                                    <span>Checkout</span>
                                     <input
                                         type="date"
                                         value={checkOut}
+                                        min={addDays(checkIn, 1)}
                                         onChange={(e) => setCheckOut(e.target.value)}
-                                        style={{ border: 'none', outline: 'none', width: '100%', fontSize: '14px', fontFamily: 'inherit', color: 'var(--text-primary)' }}
                                     />
-                                </div>
+                                </label>
                             </div>
-                            <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div>
-                                    <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }}>Guests</div>
-                                    <div style={{ fontSize: '14px' }}>{guestCount} guest{guestCount !== 1 && 's'}</div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button
-                                        onClick={() => setGuestCount(Math.max(1, guestCount - 1))}
-                                        style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--color-gray-400)', background: 'white', cursor: 'pointer' }}
-                                    >-</button>
-                                    <button
-                                        onClick={() => setGuestCount(Math.min(guestLimit, guestCount + 1))}
-                                        style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--color-gray-400)', background: 'white', cursor: 'pointer' }}
-                                    >+</button>
-                                </div>
+
+                            <label className={styles.formField}>
+                                <span>Guests</span>
+                                <select value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value))}>
+                                    {Array.from({ length: guestLimit }, (_, index) => index + 1).map((value) => (
+                                        <option key={value} value={value}>
+                                            {value} guest{value > 1 ? 's' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            <div className={styles.modeToggle} role="tablist" aria-label="Booking mode">
+                                <button
+                                    type="button"
+                                    className={bookingMode === 'reserve' ? styles.modeButtonActive : styles.modeButton}
+                                    onClick={() => setBookingMode('reserve')}
+                                >
+                                    Reserve
+                                </button>
+                                <button
+                                    type="button"
+                                    className={bookingMode === 'request' ? styles.modeButtonActive : styles.modeButton}
+                                    onClick={() => setBookingMode('request')}
+                                >
+                                    Request
+                                </button>
+                            </div>
+
+                            <button
+                                type="button"
+                                className={styles.reserveButton}
+                                onClick={() => handleBooking(bookingMode)}
+                                disabled={nights <= 0}
+                            >
+                                {bookingActionLabel}
+                            </button>
+
+                            <div className={styles.bookingNote}>
+                                {bookingHeadline}. You will not be charged yet.
                             </div>
                         </div>
 
-                        <button className={styles.reserveButton} onClick={handleReserve} disabled={nights <= 0}>
-                            Reserve
-                        </button>
-                        <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '14px', color: 'var(--text-secondary)' }}>
-                            You won't be charged yet
-                        </div>
-
-                        {nights > 0 && (
-                            <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '16px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                                    <span style={{ textDecoration: 'underline' }}>{formatPrice(listing.price, listing.currency)} x {nights} nights</span>
-                                    <span>{formatPrice(subtotal, listing.currency)}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                                    <span style={{ textDecoration: 'underline' }}>Cleaning fee</span>
-                                    <span>{formatPrice(cleaningFee, listing.currency)}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                                    <span style={{ textDecoration: 'underline' }}>Aevr service fee</span>
-                                    <span>{formatPrice(serviceFee, listing.currency)}</span>
-                                </div>
-                                <div style={{ borderTop: '1px solid var(--color-gray-100)', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
-                                    <span>Total before taxes</span>
-                                    <span>{formatPrice(total, listing.currency)}</span>
-                                </div>
+                        {availabilityBlocks.length > 0 && (
+                            <div className={styles.availabilityList}>
+                                <div className={styles.availabilityTitle}>Blocked dates</div>
+                                {availabilityBlocks.map((block) => (
+                                    <div key={block.id} className={styles.availabilityRow}>
+                                        <span className={block.status === 'booked' ? styles.availabilityBooked : styles.availabilityRestricted}>
+                                            {block.status === 'booked' ? 'Booked' : 'Restricted'}
+                                        </span>
+                                        <span>{formatDateRange(block.startDate, block.endDate)}</span>
+                                    </div>
+                                ))}
                             </div>
                         )}
+
+                        <div className={styles.priceBreakdown}>
+                            <div className={styles.breakdownRow}>
+                                <span>{formatPrice(listing.price, listing.currency)} x {nights || 0} nights</span>
+                                <span>{formatPrice(subtotal, listing.currency)}</span>
+                            </div>
+                            <div className={styles.breakdownRow}>
+                                <span>Cleaning fee</span>
+                                <span>{formatPrice(cleaningFee, listing.currency)}</span>
+                            </div>
+                            <div className={styles.breakdownRow}>
+                                <span>Service fee</span>
+                                <span>{formatPrice(serviceFee, listing.currency)}</span>
+                            </div>
+                            <div className={styles.breakdownRow}>
+                                <span>Taxes</span>
+                                <span>{formatPrice(taxes, listing.currency)}</span>
+                            </div>
+                            <div className={`${styles.breakdownRow} ${styles.totalRow}`}>
+                                <span>Total</span>
+                                <span>{formatPrice(total, listing.currency)}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

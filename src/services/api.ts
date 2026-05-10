@@ -1,4 +1,14 @@
-import type { CategoriesResponse, ListingsResponse, Listing, CreateListingInput } from '../types';
+import type {
+    CategoriesResponse,
+    ListingsResponse,
+    Listing,
+    CreateListingInput,
+    ListingFilters,
+    ListingSortOption,
+    UpdateListingInput,
+    AvailabilityBlock,
+    AvailabilityBlockStatus,
+} from '../types';
 import { supabase } from './supabase';
 
 const DELAY_MS = 800;
@@ -57,6 +67,14 @@ type SupabaseListingRow = {
             label: string;
         } | null;
     }> | null;
+};
+
+type SupabaseAvailabilityBlockRow = {
+    id: string;
+    listing_id: string;
+    start_date: string;
+    end_date: string;
+    reason: string | null;
 };
 
 const LISTING_SELECT = `
@@ -163,6 +181,20 @@ const mapListing = (row: SupabaseListingRow): Listing => {
     };
 };
 
+const mapAvailabilityBlock = (row: SupabaseAvailabilityBlockRow): AvailabilityBlock => {
+    const reason = row.reason?.trim().toLowerCase();
+    const status: AvailabilityBlockStatus = reason === 'restricted' ? 'restricted' : 'booked';
+
+    return {
+        id: row.id,
+        listingId: row.listing_id,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        status,
+        reason: row.reason ?? undefined,
+    };
+};
+
 const fetchSupabaseCategories = async (): Promise<CategoriesResponse> => {
     if (!supabase) {
         return [];
@@ -204,10 +236,39 @@ const resolveCategoryId = async (slug: string): Promise<string | null> => {
     return data.id;
 };
 
-const fetchSupabaseListings = async (category?: string, search?: string): Promise<ListingsResponse> => {
+const sortListingRows = (rows: SupabaseListingRow[], sort: ListingSortOption) => {
+    const byPriceAsc = (a: SupabaseListingRow, b: SupabaseListingRow) => (a.price_per_night ?? 0) - (b.price_per_night ?? 0);
+    const byPriceDesc = (a: SupabaseListingRow, b: SupabaseListingRow) => (b.price_per_night ?? 0) - (a.price_per_night ?? 0);
+    const byRatingDesc = (a: SupabaseListingRow, b: SupabaseListingRow) => (b.rating ?? 0) - (a.rating ?? 0);
+
+    const sorted = rows.slice();
+    if (sort === 'price_asc') {
+        sorted.sort(byPriceAsc);
+    } else if (sort === 'price_desc') {
+        sorted.sort(byPriceDesc);
+    } else if (sort === 'rating_desc') {
+        sorted.sort(byRatingDesc);
+    }
+
+    return sorted;
+};
+
+const fetchSupabaseListings = async (filters: ListingFilters = {}): Promise<ListingsResponse> => {
     if (!supabase) {
         return [];
     }
+
+    const {
+        category,
+        search,
+        sort = 'recommended',
+        maxPrice,
+        minPrice,
+        guests,
+        bedrooms,
+        baths,
+        guestFavoriteOnly,
+    } = filters;
 
     const categoryId = category ? await resolveCategoryId(category) : null;
     if (category && category !== 'icons' && !categoryId) {
@@ -223,18 +284,54 @@ const fetchSupabaseListings = async (category?: string, search?: string): Promis
         query = query.eq('category_id', categoryId);
     }
 
+    if (typeof minPrice === 'number' && !Number.isNaN(minPrice)) {
+        query = query.gte('price_per_night', minPrice);
+    }
+
+    if (typeof maxPrice === 'number' && !Number.isNaN(maxPrice)) {
+        query = query.lte('price_per_night', maxPrice);
+    }
+
+    if (typeof guests === 'number' && !Number.isNaN(guests)) {
+        query = query.gte('guest_count_max', guests);
+    }
+
+    if (typeof bedrooms === 'number' && !Number.isNaN(bedrooms)) {
+        query = query.gte('bedrooms', bedrooms);
+    }
+
+    if (typeof baths === 'number' && !Number.isNaN(baths)) {
+        query = query.gte('baths', baths);
+    }
+
+    if (guestFavoriteOnly) {
+        query = query.eq('is_guest_favorite', true);
+    }
+
     if (search?.trim()) {
         const q = search.trim();
         query = query.or(`city.ilike.%${q}%,country.ilike.%${q}%,title.ilike.%${q}%`);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data, error } = await query.order(
+        sort === 'price_asc'
+            ? 'price_per_night'
+            : sort === 'price_desc'
+                ? 'price_per_night'
+                : sort === 'rating_desc'
+                    ? 'rating'
+                    : 'created_at',
+        { ascending: sort === 'price_asc' }
+    );
 
     if (error || !data) {
         return [];
     }
 
-    return (data as unknown as SupabaseListingRow[]).map(mapListing);
+    const rows = data as unknown as SupabaseListingRow[];
+    return sort === 'price_desc' || sort === 'rating_desc'
+        ? sortListingRows(rows, sort).map(mapListing)
+        : rows.map(mapListing);
 };
 
 const fetchSupabaseListingById = async (id: string): Promise<Listing | undefined> => {
@@ -253,6 +350,24 @@ const fetchSupabaseListingById = async (id: string): Promise<Listing | undefined
     }
 
     return mapListing(data as unknown as SupabaseListingRow);
+};
+
+const fetchSupabaseAvailabilityBlocks = async (listingId: string): Promise<AvailabilityBlock[]> => {
+    if (!supabase) {
+        return [];
+    }
+
+    const { data, error } = await supabase
+        .from('availability_blocks')
+        .select('id, listing_id, start_date, end_date, reason')
+        .eq('listing_id', listingId)
+        .order('start_date', { ascending: true });
+
+    if (error || !data) {
+        return [];
+    }
+
+    return (data as SupabaseAvailabilityBlockRow[]).map(mapAvailabilityBlock);
 };
 
 const resolveCategoryRow = async (slug: string): Promise<{ id: string; slug: string; label: string; icon_name: string } | null> => {
@@ -295,6 +410,43 @@ const resolveAmenityIds = async (labels: string[]) => {
     });
 };
 
+const persistListingImages = async (listingId: string, imageUrls: string[], altText: string) => {
+    if (!supabase) {
+        return;
+    }
+
+    await supabase.from('listing_images').delete().eq('listing_id', listingId);
+
+    if (imageUrls.length > 0) {
+        await supabase.from('listing_images').insert(
+            imageUrls.map((imageUrl, index) => ({
+                listing_id: listingId,
+                image_url: imageUrl,
+                sort_order: index,
+                alt_text: altText,
+            }))
+        );
+    }
+};
+
+const persistListingAmenities = async (listingId: string, amenityLabels: string[]) => {
+    if (!supabase) {
+        return;
+    }
+
+    await supabase.from('listing_amenities').delete().eq('listing_id', listingId);
+
+    const amenityRows = await resolveAmenityIds(amenityLabels);
+    if (amenityRows.length > 0) {
+        await supabase.from('listing_amenities').insert(
+            amenityRows.map((amenity) => ({
+                listing_id: listingId,
+                amenity_id: amenity.id,
+            }))
+        );
+    }
+};
+
 export const api = {
     fetchCategories: (): Promise<CategoriesResponse> => {
         return new Promise((resolve) => {
@@ -306,10 +458,10 @@ export const api = {
         });
     },
 
-    fetchListings: (category?: string, search?: string): Promise<ListingsResponse> => {
+    fetchListings: (filters: ListingFilters = {}): Promise<ListingsResponse> => {
         return new Promise((resolve) => {
             setTimeout(() => {
-                fetchSupabaseListings(category, search)
+                fetchSupabaseListings(filters)
                     .then(resolve)
                     .catch(() => resolve([]));
             }, DELAY_MS);
@@ -322,6 +474,16 @@ export const api = {
                 fetchSupabaseListingById(id)
                     .then(resolve)
                     .catch(() => resolve(undefined));
+            }, DELAY_MS);
+        });
+    },
+
+    fetchAvailabilityBlocks: (listingId: string): Promise<AvailabilityBlock[]> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                fetchSupabaseAvailabilityBlocks(listingId)
+                    .then(resolve)
+                    .catch(() => resolve([]));
             }, DELAY_MS);
         });
     },
@@ -382,27 +544,113 @@ export const api = {
             throw listingError ?? new Error('Unable to create listing');
         }
 
-        if (input.imageUrls.length > 0) {
-            await supabase.from('listing_images').insert(
-                input.imageUrls.map((imageUrl, index) => ({
-                    listing_id: listing.id,
-                    image_url: imageUrl,
-                    sort_order: index,
-                    alt_text: input.title,
-                }))
-            );
-        }
-
-        const amenityRows = await resolveAmenityIds(input.amenityLabels);
-        if (amenityRows.length > 0) {
-            await supabase.from('listing_amenities').insert(
-                amenityRows.map((amenity) => ({
-                    listing_id: listing.id,
-                    amenity_id: amenity.id,
-                }))
-            );
-        }
+        await persistListingImages(listing.id, input.imageUrls, input.title);
+        await persistListingAmenities(listing.id, input.amenityLabels);
 
         return mapListing(listing as unknown as SupabaseListingRow);
+    },
+
+    updateListing: async (hostId: string, listingId: string, input: UpdateListingInput): Promise<Listing> => {
+        if (!supabase) {
+            throw new Error('Supabase is not configured');
+        }
+
+        const category = await resolveCategoryRow(input.categorySlug);
+        if (!category) {
+            throw new Error('Category not found');
+        }
+
+        const { data: updated, error } = await supabase
+            .from('listings')
+            .update({
+                category_id: category.id,
+                title: input.title,
+                description: input.description,
+                price_per_night: input.pricePerNight,
+                currency: input.currency,
+                city: input.city,
+                country: input.country,
+                lat: input.lat,
+                lng: input.lng,
+                map_link: input.mapLink ?? null,
+                guest_count_max: input.guestCountMax,
+                bedrooms: input.bedrooms,
+                beds: input.beds,
+                baths: input.baths,
+                availability_summary: input.availabilitySummary ?? null,
+                host_id: hostId,
+            })
+            .eq('id', listingId)
+            .eq('host_id', hostId)
+            .select(LISTING_SELECT)
+            .maybeSingle();
+
+        if (error || !updated) {
+            throw error ?? new Error('Unable to update listing');
+        }
+
+        if (input.imageUrls) {
+            await persistListingImages(listingId, input.imageUrls, input.title);
+        }
+
+        await persistListingAmenities(listingId, input.amenityLabels);
+
+        return mapListing(updated as unknown as SupabaseListingRow);
+    },
+
+    deleteListing: async (hostId: string, listingId: string): Promise<void> => {
+        if (!supabase) {
+            throw new Error('Supabase is not configured');
+        }
+
+        const { error } = await supabase
+            .from('listings')
+            .update({ is_active: false })
+            .eq('id', listingId)
+            .eq('host_id', hostId);
+
+        if (error) {
+            throw error;
+        }
+    },
+
+    createAvailabilityBlock: async (
+        input: { listingId: string; startDate: string; endDate: string; status: AvailabilityBlockStatus }
+    ): Promise<AvailabilityBlock> => {
+        if (!supabase) {
+            throw new Error('Supabase is not configured');
+        }
+
+        const { data, error } = await supabase
+            .from('availability_blocks')
+            .insert({
+                listing_id: input.listingId,
+                start_date: input.startDate,
+                end_date: input.endDate,
+                reason: input.status,
+            })
+            .select('id, listing_id, start_date, end_date, reason')
+            .single();
+
+        if (error || !data) {
+            throw error ?? new Error('Unable to create availability block');
+        }
+
+        return mapAvailabilityBlock(data as SupabaseAvailabilityBlockRow);
+    },
+
+    deleteAvailabilityBlock: async (blockId: string): Promise<void> => {
+        if (!supabase) {
+            throw new Error('Supabase is not configured');
+        }
+
+        const { error } = await supabase
+            .from('availability_blocks')
+            .delete()
+            .eq('id', blockId);
+
+        if (error) {
+            throw error;
+        }
     },
 };

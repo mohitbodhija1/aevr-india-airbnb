@@ -12,6 +12,143 @@
     gap: 40px 24px;
 }
 
+.discoveryPanel {
+    margin-bottom: 28px;
+    padding: 20px;
+    border: 1px solid var(--color-gray-100);
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: var(--shadow-sm);
+}
+
+.discoveryHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.discoveryEyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary);
+    margin-bottom: 8px;
+}
+
+.discoveryHeader h1 {
+    font-size: clamp(1.4rem, 2.4vw, 2rem);
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 6px;
+}
+
+.discoveryHeader p {
+    color: var(--text-secondary);
+}
+
+.discoveryActions {
+    flex-shrink: 0;
+}
+
+.clearButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--color-gray-100);
+    background: var(--color-white);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.clearButton:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.discoveryControls {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+    align-items: end;
+}
+
+.controlField {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.controlField span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+}
+
+.controlField select {
+    width: 100%;
+    border: 1px solid var(--color-gray-100);
+    border-radius: 16px;
+    padding: 12px 14px;
+    background: var(--color-white);
+    font: inherit;
+    color: var(--text-primary);
+}
+
+.favoriteToggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--color-gray-100);
+    background: var(--color-gray-50);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    padding: 0 16px;
+}
+
+.favoriteToggleActive {
+    background: rgba(0, 132, 137, 0.12);
+    border-color: rgba(0, 132, 137, 0.2);
+    color: var(--color-primary);
+}
+
+.quickChips {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.quickChips::-webkit-scrollbar {
+    display: none;
+}
+
+.quickChip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--color-gray-100);
+    background: var(--color-white);
+    color: var(--text-primary);
+    font-weight: var(--font-weight-medium);
+}
+
 @media (max-width: 744px) {
     .mainContainer {
         padding-left: var(--container-padding);
@@ -23,6 +160,23 @@
     .grid {
         grid-template-columns: 1fr;
         gap: 24px;
+    }
+
+    .discoveryPanel {
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+
+    .discoveryHeader {
+        flex-direction: column;
+    }
+
+    .discoveryControls {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .favoriteToggle {
+        grid-column: 1 / -1;
     }
 }
 

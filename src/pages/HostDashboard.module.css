@@ -43,7 +43,9 @@
 
 .primaryButton,
 .secondaryButton,
-.viewLink {
+.viewLink,
+.actionPill,
+.deletePill {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -202,6 +204,33 @@
     background: white;
 }
 
+.cardActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.actionPill,
+.deletePill {
+    padding: 10px 12px;
+    border: 1px solid var(--color-gray-100);
+    background: white;
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+}
+
+.deletePill {
+    color: #8a2132;
+    border-color: rgba(255, 56, 92, 0.2);
+    background: rgba(255, 56, 92, 0.06);
+}
+
+.deletePill:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .emptyState,
 .loading {
     min-height: 60vh;
@@ -239,5 +268,9 @@
         width: 100%;
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .cardActions {
+        justify-content: flex-start;
     }
 }

@@ -198,6 +198,7 @@
     border: 1px solid var(--color-gray-100);
     border-radius: var(--radius-lg);
     padding: 24px;
+    background: rgba(255, 255, 255, 0.96);
     box-shadow: var(--shadow-floating);
 }
 
@@ -206,11 +207,111 @@
     justify-content: space-between;
     align-items: baseline;
     margin-bottom: 24px;
+    gap: 16px;
 }
 
 .cardPrice {
     font-size: var(--font-size-xl);
     font-weight: var(--font-weight-semibold);
+}
+
+.cardPrice span {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-regular);
+    color: var(--text-secondary);
+}
+
+.cardMeta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.statusBanner {
+    border-radius: 16px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    background: rgba(255, 56, 92, 0.08);
+    color: #8a2132;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.statusSuccess {
+    background: rgba(0, 132, 137, 0.12);
+    color: var(--color-primary);
+}
+
+.statusInfo {
+    background: rgba(0, 132, 137, 0.08);
+    color: var(--color-primary);
+}
+
+.bookingForm {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.dateGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.formField {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.formField span {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.formField input,
+.formField select {
+    width: 100%;
+    border: 1px solid var(--color-gray-100);
+    border-radius: 16px;
+    padding: 12px 14px;
+    font: inherit;
+    color: var(--text-primary);
+    background: var(--color-white);
+}
+
+.modeToggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 4px;
+    border-radius: 9999px;
+    background: var(--color-gray-50);
+}
+
+.modeButton,
+.modeButtonActive {
+    border-radius: 9999px;
+    padding: 11px 14px;
+    font-weight: var(--font-weight-semibold);
+    transition: background-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.modeButton {
+    color: var(--text-secondary);
+}
+
+.modeButtonActive {
+    background: var(--color-white);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
 }
 
 .reserveButton {
@@ -227,6 +328,79 @@
 
 .reserveButton:active {
     transform: scale(0.98);
+}
+
+.bookingNote {
+    text-align: center;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.availabilityList {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--color-gray-100);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.availabilityTitle {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.availabilityRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.availabilityBooked,
+.availabilityRestricted {
+    flex: 0 0 auto;
+    border-radius: var(--radius-full);
+    padding: 4px 8px;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+}
+
+.availabilityBooked {
+    background: rgba(255, 56, 92, 0.12);
+    color: #8a2132;
+}
+
+.availabilityRestricted {
+    background: rgba(0, 132, 137, 0.12);
+    color: var(--color-primary);
+}
+
+.priceBreakdown {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--color-gray-100);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.breakdownRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.totalRow {
+    padding-top: 12px;
+    border-top: 1px solid var(--color-gray-100);
+    color: var(--text-primary);
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-md);
 }
 
 @media (max-width: 950px) {
@@ -254,5 +428,29 @@
 
     .contentGrid {
         padding: 0 24px;
+    }
+
+    .subHeading {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .cardHeader {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .dateGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .modeToggle {
+        grid-template-columns: 1fr;
     }
 }

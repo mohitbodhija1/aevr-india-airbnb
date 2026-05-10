@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './Header.module.css';
 import { Search, Globe, Menu, UserCircle, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -10,6 +10,10 @@ export const Header: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+    useEffect(() => {
+        setSearchTerm(searchParams.get('q') || '');
+    }, [searchParams]);
+
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         const params = new URLSearchParams(searchParams);
@@ -19,6 +23,7 @@ export const Header: React.FC = () => {
             params.delete('q');
         }
         setIsSearchOpen(false);
+        setIsMenuOpen(false);
         navigate(`/?${params.toString()}`);
     };
 
@@ -32,6 +37,7 @@ export const Header: React.FC = () => {
         setSearchTerm('');
         const params = new URLSearchParams(searchParams);
         params.delete('q');
+        setIsMenuOpen(false);
         navigate(`/?${params.toString()}`);
     }
 
