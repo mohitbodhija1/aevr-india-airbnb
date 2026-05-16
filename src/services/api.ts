@@ -11,6 +11,11 @@ import type {
     Booking,
     BookingHistoryItem,
     RoomType,
+    FlashSaleDrop,
+    FlashSaleType,
+    HostApprovalApplication,
+    HostApprovalStatus,
+    UpsertFlashSaleInput,
 } from '../types';
 import { supabase } from './supabase';
 
@@ -106,6 +111,38 @@ type SupabaseBookingRow = {
         currency: string;
         listing_images: Array<{ image_url: string; sort_order: number | null }> | null;
     }>;
+};
+
+type SupabaseFlashSaleRow = {
+    id: string;
+    listing_id: string;
+    sale_type: FlashSaleType;
+    sale_value: number | string;
+    start_at: string;
+    end_at: string;
+    is_active: boolean;
+    created_by: string;
+    created_at: string;
+    updated_at: string;
+    listing: JoinedEntity<SupabaseListingRow>;
+};
+
+type SupabaseProfileRow = {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    role: 'guest' | 'host' | 'admin';
+    host_approval_status: HostApprovalStatus | null;
+    host_reviewed_at: string | null;
+    host_reviewed_by: string | null;
+    host_review_note: string | null;
+    created_at: string;
+};
+
+export type CurrentUserSummary = {
+    id: string;
+    name: string;
+    role: 'guest' | 'host' | 'admin';
 };
 
 const LISTING_SELECT = `
@@ -326,6 +363,158 @@ const mapBooking = (row: SupabaseBookingRow): BookingHistoryItem => {
             imageUrl,
         },
     };
+};
+
+const calculateFlashSalePrice = (listingPrice: number, saleType: FlashSaleType, saleValue: number) => {
+    if (saleType === 'percent') {
+        const discountPercent = Math.max(1, Math.min(99, saleValue));
+        const salePrice = Math.max(1, listingPrice * (1 - discountPercent / 100));
+        return { salePrice, discountPercent };
+    }
+
+    const salePrice = Math.max(1, saleValue);
+    const discountPercent = listingPrice > 0
+        ? Math.max(0, Math.min(99, ((listingPrice - salePrice) / listingPrice) * 100))
+        : 0;
+    return { salePrice, discountPercent };
+};
+
+const mapFlashSale = (row: SupabaseFlashSaleRow): FlashSaleDrop | null => {
+    const listingRow = first(row.listing);
+    if (!listingRow) {
+        return null;
+    }
+    const listing = mapListing(listingRow);
+    const saleValue = Number(row.sale_value);
+    const { salePrice, discountPercent } = calculateFlashSalePrice(listing.price, row.sale_type, saleValue);
+
+    return {
+        id: row.id,
+        listingId: row.listing_id,
+        listing,
+        saleType: row.sale_type,
+        saleValue,
+        startAt: row.start_at,
+        endAt: row.end_at,
+        isActive: row.is_active,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        salePrice,
+        discountPercent,
+    };
+};
+
+const FLASH_SALE_SELECT = `
+    id,
+    listing_id,
+    sale_type,
+    sale_value,
+    start_at,
+    end_at,
+    is_active,
+    created_by,
+    created_at,
+    updated_at,
+    listing:listings (
+        ${LISTING_SELECT}
+    )
+`;
+
+const fetchActiveFlashDrop = async (nowIso: string): Promise<FlashSaleDrop | null> => {
+    if (!supabase) {
+        return null;
+    }
+
+    const { data, error } = await supabase
+        .from('flash_sale_drops')
+        .select(FLASH_SALE_SELECT)
+        .eq('is_active', true)
+        .lte('start_at', nowIso)
+        .gt('end_at', nowIso)
+        .order('start_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (error || !data) {
+        return null;
+    }
+
+    return mapFlashSale(data as unknown as SupabaseFlashSaleRow);
+};
+
+const fetchLatestAdminFlashDrop = async (): Promise<FlashSaleDrop | null> => {
+    if (!supabase) {
+        return null;
+    }
+
+    const { data, error } = await supabase
+        .from('flash_sale_drops')
+        .select(FLASH_SALE_SELECT)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (error || !data) {
+        return null;
+    }
+
+    return mapFlashSale(data as unknown as SupabaseFlashSaleRow);
+};
+
+const fetchCurrentProfileBasic = async (): Promise<Pick<SupabaseProfileRow, 'id' | 'full_name' | 'avatar_url' | 'role'> | null> => {
+    if (!supabase) {
+        return null;
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+        return null;
+    }
+
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, role')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+    if (error || !data) {
+        return null;
+    }
+
+    return data as Pick<SupabaseProfileRow, 'id' | 'full_name' | 'avatar_url' | 'role'>;
+};
+
+const fetchHostApprovalStatusFromProfile = async (): Promise<HostApprovalStatus | null> => {
+    if (!supabase) {
+        return null;
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+        return null;
+    }
+
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('role, host_approval_status')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+    if (!error && data) {
+        const row = data as { role?: 'guest' | 'host' | 'admin'; host_approval_status?: HostApprovalStatus | null };
+        if (row.role !== 'host') {
+            return null;
+        }
+        return row.host_approval_status ?? 'pending';
+    }
+
+    // Fallback for DBs where host_approval_status column isn't migrated yet.
+    const basic = await fetchCurrentProfileBasic();
+    if (!basic || basic.role !== 'host') {
+        return null;
+    }
+    return 'approved';
 };
 
 const fetchSupabaseCategories = async (): Promise<CategoriesResponse> => {
@@ -682,6 +871,209 @@ export const api = {
                     .catch(() => resolve([]));
             }, DELAY_MS);
         });
+    },
+
+    fetchActiveFlashDrop: async (now = new Date()): Promise<FlashSaleDrop | null> => {
+        return fetchActiveFlashDrop(now.toISOString());
+    },
+
+    fetchAdminDropState: async (): Promise<FlashSaleDrop | null> => {
+        return fetchLatestAdminFlashDrop();
+    },
+
+    getCurrentUserRole: async (): Promise<'guest' | 'host' | 'admin' | null> => {
+        const profile = await fetchCurrentProfileBasic();
+        return profile?.role ?? null;
+    },
+
+    getCurrentUserSummary: async (): Promise<CurrentUserSummary | null> => {
+        const profile = await fetchCurrentProfileBasic();
+        if (!profile?.id || !profile.role) {
+            return null;
+        }
+
+        return {
+            id: profile.id,
+            name: profile.full_name?.trim() || 'User',
+            role: profile.role,
+        };
+    },
+
+    resolveHostEntryPath: async (): Promise<string> => {
+        if (!supabase) {
+            return '/host/auth';
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) {
+            return '/host/auth';
+        }
+
+        const profile = await fetchCurrentProfileBasic();
+        if (!profile?.role) {
+            return '/';
+        }
+
+        if (profile.role === 'admin') {
+            return '/host/admin';
+        }
+
+        if (profile.role === 'host') {
+            return '/host';
+        }
+
+        return '/';
+    },
+
+    resolveDashboardPath: async (): Promise<string> => {
+        if (!supabase) {
+            return '/auth';
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) {
+            return '/auth';
+        }
+
+        const role = await api.getCurrentUserRole();
+        if (role === 'admin') {
+            return '/host/admin';
+        }
+
+        if (role === 'host') {
+            return '/host';
+        }
+
+        return '/';
+    },
+
+    getHostApprovalStatus: async (): Promise<HostApprovalStatus | null> => {
+        return fetchHostApprovalStatusFromProfile();
+    },
+
+    listPendingHosts: async (): Promise<HostApprovalApplication[]> => {
+        if (!supabase) {
+            return [];
+        }
+
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, role, host_approval_status, host_reviewed_at, host_reviewed_by, host_review_note, created_at')
+            .eq('role', 'host')
+            .eq('host_approval_status', 'pending')
+            .order('created_at', { ascending: true });
+
+        if (error || !data) {
+            return [];
+        }
+
+        return (data as SupabaseProfileRow[]).map((row) => ({
+            id: row.id,
+            fullName: row.full_name ?? 'Unnamed host',
+            avatarUrl: row.avatar_url ?? undefined,
+            role: row.role,
+            hostApprovalStatus: row.host_approval_status ?? 'pending',
+            createdAt: row.created_at,
+            reviewedAt: row.host_reviewed_at ?? undefined,
+            reviewedBy: row.host_reviewed_by ?? undefined,
+            reviewNote: row.host_review_note ?? undefined,
+        }));
+    },
+
+    reviewHostApplication: async (
+        userId: string,
+        decision: 'approved' | 'rejected',
+        note?: string
+    ): Promise<void> => {
+        if (!supabase) {
+            throw new Error('Supabase is not configured');
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) {
+            throw new Error('You must be signed in as admin');
+        }
+
+        const { error } = await supabase
+            .from('profiles')
+            .update({
+                host_approval_status: decision,
+                host_reviewed_at: new Date().toISOString(),
+                host_reviewed_by: authData.user.id,
+                host_review_note: note?.trim() ? note.trim() : null,
+            })
+            .eq('id', userId)
+            .eq('role', 'host');
+
+        if (error) {
+            throw error;
+        }
+    },
+
+    upsertScheduledDrop: async (input: UpsertFlashSaleInput): Promise<FlashSaleDrop> => {
+        if (!supabase) {
+            throw new Error('Supabase is not configured');
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) {
+            throw new Error('You must be signed in as admin');
+        }
+
+        const saleValue = Number(input.saleValue);
+        if (!Number.isFinite(saleValue) || saleValue <= 0) {
+            throw new Error('Sale value must be greater than 0');
+        }
+
+        const startAt = new Date(input.startAt);
+        if (Number.isNaN(startAt.getTime())) {
+            throw new Error('Invalid start date');
+        }
+        if (startAt.getTime() < Date.now()) {
+            throw new Error('Start date cannot be in the past');
+        }
+        const endAt = new Date(startAt.getTime() + (72 * 60 * 60 * 1000));
+
+        await supabase.from('flash_sale_drops').update({ is_active: false }).eq('is_active', true);
+
+        const { data, error } = await supabase
+            .from('flash_sale_drops')
+            .insert({
+                listing_id: input.listingId,
+                sale_type: input.saleType,
+                sale_value: saleValue,
+                start_at: startAt.toISOString(),
+                end_at: endAt.toISOString(),
+                is_active: true,
+                created_by: authData.user.id,
+            })
+            .select(FLASH_SALE_SELECT)
+            .single();
+
+        if (error || !data) {
+            throw error ?? new Error('Unable to schedule drop');
+        }
+
+        const mapped = mapFlashSale(data as unknown as SupabaseFlashSaleRow);
+        if (!mapped) {
+            throw new Error('Unable to read created drop');
+        }
+        return mapped;
+    },
+
+    deactivateDrop: async (dropId: string): Promise<void> => {
+        if (!supabase) {
+            throw new Error('Supabase is not configured');
+        }
+
+        const { error } = await supabase
+            .from('flash_sale_drops')
+            .update({ is_active: false })
+            .eq('id', dropId);
+
+        if (error) {
+            throw error;
+        }
     },
 
     fetchHostListings: async (hostId: string): Promise<ListingsResponse> => {

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './HostAuth.module.css';
 import { authService } from '../services/auth';
+import { api } from '../services/api';
 import { hasSupabaseConfig } from '../services/supabase';
 
 type Mode = 'sign-in' | 'sign-up';
@@ -20,7 +21,8 @@ export const HostAuth = () => {
         const loadSession = async () => {
             const session = await authService.getSession();
             if (session) {
-                navigate('/host', { replace: true });
+                const path = await api.resolveHostEntryPath();
+                navigate(path, { replace: true });
                 return;
             }
 
@@ -42,7 +44,8 @@ export const HostAuth = () => {
                     setMessage(error.message);
                     return;
                 }
-                navigate('/host', { replace: true });
+                const path = await api.resolveHostEntryPath();
+                navigate(path, { replace: true });
                 return;
             }
 
@@ -53,7 +56,8 @@ export const HostAuth = () => {
             }
 
             if (data.session) {
-                navigate('/host', { replace: true });
+                const path = await api.resolveHostEntryPath();
+                navigate(path, { replace: true });
             } else {
                 setMessage('Account created. Check your email to verify your account, then come back to continue.');
             }

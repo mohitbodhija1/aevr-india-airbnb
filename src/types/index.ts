@@ -7,6 +7,20 @@ export interface User {
     bio?: string;
 }
 
+export type HostApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+export interface HostApprovalApplication {
+    id: string;
+    fullName: string;
+    avatarUrl?: string;
+    role: 'guest' | 'host' | 'admin';
+    hostApprovalStatus: HostApprovalStatus;
+    createdAt: string;
+    reviewedAt?: string;
+    reviewedBy?: string;
+    reviewNote?: string;
+}
+
 export interface Location {
     id: string;
     city: string;
@@ -68,6 +82,7 @@ export interface Category {
 }
 
 export type ListingSortOption = 'recommended' | 'price_asc' | 'price_desc' | 'rating_desc';
+export type FlashSaleType = 'percent' | 'manual_price';
 
 export interface ListingFilters {
     category?: string;
@@ -131,6 +146,29 @@ export interface BookingHistoryItem extends Booking {
         currency?: string;
         imageUrl?: string;
     };
+}
+
+export interface FlashSaleDrop {
+    id: string;
+    listingId: string;
+    listing: Listing;
+    saleType: FlashSaleType;
+    saleValue: number;
+    startAt: string;
+    endAt: string;
+    isActive: boolean;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+    salePrice: number;
+    discountPercent: number;
+}
+
+export interface UpsertFlashSaleInput {
+    listingId: string;
+    saleType: FlashSaleType;
+    saleValue: number;
+    startAt: string;
 }
 
 export interface Favorite {

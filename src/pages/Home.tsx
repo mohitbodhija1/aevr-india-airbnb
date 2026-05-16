@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Filter, Sparkles, SlidersHorizontal, X } from 'lucide-react';
+import { Clock3, Filter, ShieldCheck, Sparkles, SlidersHorizontal, X } from 'lucide-react';
 import styles from '../App.module.css'; // Reusing the grid styles from App module
 import { Categories } from '../components/Categories';
 import { ListingCard } from '../components/ListingCard';
 import { api } from '../services/api';
-import type { Listing, ListingFilters, ListingSortOption } from '../types';
+import type { FlashSaleDrop, Listing, ListingFilters, ListingSortOption } from '../types';
 
 const SORT_OPTIONS: Array<{ value: ListingSortOption; label: string }> = [
     { value: 'recommended', label: 'Recommended' },
@@ -34,7 +34,6 @@ const parseSortParam = (value: string | null): ListingSortOption => {
 export const Home = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const categoryParam = searchParams.get('category');
-    const searchParam = searchParams.get('q') || '';
     const categoryFilter = categoryParam && categoryParam !== 'icons' ? categoryParam : undefined;
     const sort = parseSortParam(searchParams.get('sort'));
     const maxPrice = parseNumberParam(searchParams.get('maxPrice'));
@@ -44,6 +43,8 @@ export const Home = () => {
     const guestFavoriteOnly = searchParams.get('favorites') === '1';
 
     const [listings, setListings] = useState<Listing[]>([]);
+    const [activeDrop, setActiveDrop] = useState<FlashSaleDrop | null>(null);
+    const [nowTs, setNowTs] = useState(Date.now());
     const [loading, setLoading] = useState(true);
 
     const updateParams = (patch: Record<string, string | number | boolean | null | undefined>) => {
@@ -71,7 +72,7 @@ export const Home = () => {
 
     const clearFilters = () => {
         const params = new URLSearchParams(searchParams);
-        ['category', 'q', 'sort', 'maxPrice', 'guests', 'bedrooms', 'baths', 'favorites'].forEach((key) => params.delete(key));
+        ['category', 'sort', 'maxPrice', 'guests', 'bedrooms', 'baths', 'favorites'].forEach((key) => params.delete(key));
         setSearchParams(params);
     };
 
@@ -85,7 +86,6 @@ export const Home = () => {
             try {
                 const filters: ListingFilters = {
                     category: categoryFilter,
-                    search: searchParam,
                     sort,
                     maxPrice,
                     guests,
@@ -95,16 +95,22 @@ export const Home = () => {
                 };
                 const data = await api.fetchListings(filters);
                 setListings(data);
+                const drop = await api.fetchActiveFlashDrop(new Date());
+                setActiveDrop(drop);
             } finally {
                 setLoading(false);
             }
         };
         loadListings();
-    }, [categoryFilter, searchParam, sort, maxPrice, guests, bedrooms, baths, guestFavoriteOnly]);
+    }, [categoryFilter, sort, maxPrice, guests, bedrooms, baths, guestFavoriteOnly]);
+
+    useEffect(() => {
+        const id = window.setInterval(() => setNowTs(Date.now()), 1000);
+        return () => window.clearInterval(id);
+    }, []);
 
     const activeFiltersCount = [
         categoryFilter,
-        searchParam,
         sort !== 'recommended' ? sort : null,
         maxPrice,
         guests,
@@ -112,6 +118,14 @@ export const Home = () => {
         baths,
         guestFavoriteOnly ? 'favorites' : null,
     ].filter(Boolean).length;
+
+    const remainingMs = activeDrop ? new Date(activeDrop.endAt).getTime() - nowTs : 0;
+    const hasActiveDrop = Boolean(activeDrop && remainingMs > 0);
+    const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+    const hours = Math.floor(remainingSeconds / 3600);
+    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+    const seconds = remainingSeconds % 60;
+    const countdown = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
     return (
         <>
@@ -121,11 +135,39 @@ export const Home = () => {
             />
 
             <main className={styles.mainContainer}>
+                {hasActiveDrop && activeDrop && (
+                    <section className={styles.flashSaleCard}>
+                        <img
+                            className={styles.flashSaleImage}
+                            src={activeDrop.listing.images[0] ?? 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1200&auto=format&fit=crop'}
+                            alt={activeDrop.listing.title}
+                        />
+                        <div className={styles.flashSaleBody}>
+                            <div className={styles.flashSaleMeta}>
+                                <span className={styles.flashSaleBadge}>
+                                    <ShieldCheck size={14} /> Verified by AevrLux
+                                </span>
+                                <span className={styles.flashSaleTimer}>
+                                    <Clock3 size={14} /> {countdown}
+                                </span>
+                            </div>
+                            <h2>{activeDrop.listing.title}</h2>
+                            <p>{activeDrop.listing.location.city}, {activeDrop.listing.location.country}</p>
+                            <div className={styles.flashSalePricing}>
+                                <span className={styles.flashOldPrice}>₹{Math.round(activeDrop.listing.price).toLocaleString('en-IN')}</span>
+                                <strong>₹{Math.round(activeDrop.salePrice).toLocaleString('en-IN')}</strong>
+                                <span className={styles.flashDiscount}>{Math.round(activeDrop.discountPercent)}% OFF</span>
+                            </div>
+                            <a className={styles.flashSaleCta} href={`/rooms/${activeDrop.listing.id}`}>View drop</a>
+                        </div>
+                    </section>
+                )}
+
                 <section className={styles.discoveryPanel}>
                     <div className={styles.discoveryHeader}>
                         <div>
                             <div className={styles.discoveryEyebrow}>Search and discovery</div>
-                            <h1>{searchParam ? `Results for "${searchParam}"` : 'Find your next stay'}</h1>
+                            <h1>Find your next stay</h1>
                             <p>
                                 {loading
                                     ? 'Loading stays...'
@@ -240,7 +282,7 @@ export const Home = () => {
                 ) : (
                     <div className={styles.emptyState}>
                         <h2>No listings found</h2>
-                        <p>Try loosening a filter, switching category, or clearing your search.</p>
+                        <p>Try loosening a filter, switching category, or clearing filters.</p>
                     </div>
                 )}
             </main>

@@ -9,6 +9,10 @@ create table if not exists public.profiles (
     full_name text,
     avatar_url text,
     role text not null default 'guest' check (role in ('guest', 'host', 'admin')),
+    host_approval_status text not null default 'pending' check (host_approval_status in ('pending', 'approved', 'rejected')),
+    host_reviewed_at timestamptz,
+    host_reviewed_by uuid references public.profiles (id),
+    host_review_note text,
     bio text,
     phone text,
     is_superhost boolean not null default false,
@@ -68,6 +72,20 @@ create table if not exists public.listings (
 -- Backfill columns for environments where listings existed before these fields were introduced.
 alter table public.listings add column if not exists map_link text;
 alter table public.listings add column if not exists room_types jsonb not null default '[]'::jsonb;
+alter table public.profiles add column if not exists host_approval_status text not null default 'pending' check (host_approval_status in ('pending', 'approved', 'rejected'));
+alter table public.profiles add column if not exists host_reviewed_at timestamptz;
+alter table public.profiles add column if not exists host_reviewed_by uuid references public.profiles (id);
+alter table public.profiles add column if not exists host_review_note text;
+
+update public.profiles
+set host_approval_status = 'approved'
+where role in ('admin', 'guest')
+  and host_approval_status <> 'approved';
+
+update public.profiles
+set host_approval_status = 'approved'
+where role = 'host'
+  and host_approval_status is null;
 
 create table if not exists public.listing_images (
     id uuid primary key default gen_random_uuid(),
@@ -192,11 +210,19 @@ security definer
 set search_path = public
 as $$
 begin
-    insert into public.profiles (id, full_name, avatar_url)
+    insert into public.profiles (id, full_name, avatar_url, role, host_approval_status)
     values (
         new.id,
         coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', new.email),
-        new.raw_user_meta_data ->> 'avatar_url'
+        new.raw_user_meta_data ->> 'avatar_url',
+        case
+            when (new.raw_user_meta_data ->> 'role') in ('guest', 'host', 'admin') then (new.raw_user_meta_data ->> 'role')
+            else 'guest'
+        end,
+        case
+            when (new.raw_user_meta_data ->> 'role') = 'host' then 'pending'
+            else 'approved'
+        end
     )
     on conflict (id) do nothing;
     return new;
@@ -290,6 +316,27 @@ for all
 using (auth.uid() = id)
 with check (auth.uid() = id);
 
+drop policy if exists "Admins manage profiles" on public.profiles;
+create policy "Admins manage profiles"
+on public.profiles
+for update
+using (
+    exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'admin'
+    )
+)
+with check (
+    exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'admin'
+    )
+);
+
 drop policy if exists "Public read active categories" on public.categories;
 create policy "Public read active categories"
 on public.categories
@@ -312,20 +359,56 @@ drop policy if exists "Hosts insert own listings" on public.listings;
 create policy "Hosts insert own listings"
 on public.listings
 for insert
-with check (auth.uid() = host_id);
+with check (
+    auth.uid() = host_id
+    and exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'host'
+          and p.host_approval_status = 'approved'
+    )
+);
 
 drop policy if exists "Hosts update own listings" on public.listings;
 create policy "Hosts update own listings"
 on public.listings
 for update
-using (auth.uid() = host_id)
-with check (auth.uid() = host_id);
+using (
+    auth.uid() = host_id
+    and exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'host'
+          and p.host_approval_status = 'approved'
+    )
+)
+with check (
+    auth.uid() = host_id
+    and exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'host'
+          and p.host_approval_status = 'approved'
+    )
+);
 
 drop policy if exists "Hosts delete own listings" on public.listings;
 create policy "Hosts delete own listings"
 on public.listings
 for delete
-using (auth.uid() = host_id);
+using (
+    auth.uid() = host_id
+    and exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'host'
+          and p.host_approval_status = 'approved'
+    )
+);
 
 drop policy if exists "Public read listing images for active listings" on public.listing_images;
 create policy "Public read listing images for active listings"
@@ -589,3 +672,139 @@ begin
     end if;
 end
 $$;
+
+create table if not exists public.flash_sale_drops (
+    id uuid primary key default gen_random_uuid(),
+    listing_id uuid not null references public.listings (id) on delete cascade,
+    sale_type text not null check (sale_type in ('percent', 'manual_price')),
+    sale_value numeric(12, 2) not null check (sale_value > 0),
+    start_at timestamptz not null,
+    end_at timestamptz not null,
+    is_active boolean not null default true,
+    created_by uuid not null references public.profiles (id),
+    created_at timestamptz not null default timezone('utc', now()),
+    updated_at timestamptz not null default timezone('utc', now()),
+    constraint flash_sale_valid_window check (end_at > start_at)
+);
+
+create or replace function public.ensure_flash_sale_window()
+returns trigger
+language plpgsql
+as $$
+begin
+    new.end_at = new.start_at + interval '72 hours';
+    return new;
+end;
+$$;
+
+drop trigger if exists flash_sale_drops_enforce_window on public.flash_sale_drops;
+create trigger flash_sale_drops_enforce_window
+before insert or update of start_at
+on public.flash_sale_drops
+for each row execute procedure public.ensure_flash_sale_window();
+
+drop trigger if exists flash_sale_drops_updated_at on public.flash_sale_drops;
+create trigger flash_sale_drops_updated_at
+before update on public.flash_sale_drops
+for each row execute procedure public.set_updated_at();
+
+alter table public.flash_sale_drops enable row level security;
+
+create unique index if not exists flash_sale_single_active_idx
+on public.flash_sale_drops ((is_active))
+where is_active = true;
+
+create index if not exists flash_sale_active_window_idx
+on public.flash_sale_drops (is_active, start_at, end_at);
+
+create index if not exists flash_sale_listing_id_idx
+on public.flash_sale_drops (listing_id);
+
+drop policy if exists "Public read active flash sale" on public.flash_sale_drops;
+create policy "Public read active flash sale"
+on public.flash_sale_drops
+for select
+using (
+    is_active = true
+    and start_at <= timezone('utc', now())
+    and end_at > timezone('utc', now())
+    and exists (
+        select 1
+        from public.listings l
+        where l.id = listing_id
+          and l.is_active = true
+    )
+);
+
+drop policy if exists "Admins read all flash sales" on public.flash_sale_drops;
+create policy "Admins read all flash sales"
+on public.flash_sale_drops
+for select
+using (
+    exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'admin'
+    )
+);
+
+drop policy if exists "Admins insert flash sale" on public.flash_sale_drops;
+create policy "Admins insert flash sale"
+on public.flash_sale_drops
+for insert
+with check (
+    exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'admin'
+    )
+    and exists (
+        select 1
+        from public.listings l
+        where l.id = listing_id
+          and l.is_active = true
+    )
+    and created_by = auth.uid()
+);
+
+drop policy if exists "Admins update flash sale" on public.flash_sale_drops;
+create policy "Admins update flash sale"
+on public.flash_sale_drops
+for update
+using (
+    exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'admin'
+    )
+)
+with check (
+    exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'admin'
+    )
+    and exists (
+        select 1
+        from public.listings l
+        where l.id = listing_id
+          and l.is_active = true
+    )
+);
+
+drop policy if exists "Admins delete flash sale" on public.flash_sale_drops;
+create policy "Admins delete flash sale"
+on public.flash_sale_drops
+for delete
+using (
+    exists (
+        select 1
+        from public.profiles p
+        where p.id = auth.uid()
+          and p.role = 'admin'
+    )
+);

@@ -5,7 +5,8 @@ import styles from './HostDashboard.module.css';
 import { authService } from '../services/auth';
 import { api } from '../services/api';
 import { hasSupabaseConfig } from '../services/supabase';
-import type { Listing } from '../types';
+import { HostApprovalStatusView } from '../components/HostApprovalStatus';
+import type { HostApprovalStatus, Listing } from '../types';
 
 type SessionUser = {
     id: string;
@@ -107,6 +108,7 @@ export const HostDashboard = () => {
     const [listings, setListings] = useState<Listing[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [busyListingId, setBusyListingId] = useState<string | null>(null);
+    const [hostApprovalStatus, setHostApprovalStatus] = useState<HostApprovalStatus | null>(null);
 
     useEffect(() => {
         const load = async () => {
@@ -119,6 +121,25 @@ export const HostDashboard = () => {
             const session = await authService.getSession();
             if (!session) {
                 navigate('/host/auth', { replace: true });
+                return;
+            }
+
+            const role = await api.getCurrentUserRole();
+            if (role === 'admin') {
+                navigate('/host/admin', { replace: true });
+                return;
+            }
+
+            if (role !== 'host') {
+                navigate('/', { replace: true });
+                setLoading(false);
+                return;
+            }
+
+            const approvalStatus = await api.getHostApprovalStatus();
+            if (role === 'host' && approvalStatus && approvalStatus !== 'approved') {
+                setHostApprovalStatus(approvalStatus);
+                setLoading(false);
                 return;
             }
 
@@ -175,6 +196,10 @@ export const HostDashboard = () => {
                 </div>
             </div>
         );
+    }
+
+    if (hostApprovalStatus && hostApprovalStatus !== 'approved') {
+        return <HostApprovalStatusView status={hostApprovalStatus} />;
     }
 
     const userName = getUserDisplayName(sessionUser);

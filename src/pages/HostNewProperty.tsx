@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import { authService } from '../services/auth';
 import { hasSupabaseConfig } from '../services/supabase';
 import { uploadListingImages } from '../services/storage';
+import { HostApprovalStatusView } from '../components/HostApprovalStatus';
 import type { AvailabilityBlock, AvailabilityBlockStatus, Category, Listing, RoomType } from '../types';
 
 type FormState = {
@@ -131,6 +132,7 @@ export const HostNewProperty = () => {
     const [blockStart, setBlockStart] = useState('');
     const [blockEnd, setBlockEnd] = useState('');
     const [blockStatus, setBlockStatus] = useState<AvailabilityBlockStatus>('booked');
+    const [hostApprovalStatus, setHostApprovalStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
 
     useEffect(() => {
         const load = async () => {
@@ -142,6 +144,19 @@ export const HostNewProperty = () => {
             const session = await authService.getSession();
             if (!session) {
                 navigate('/host/auth', { replace: true });
+                return;
+            }
+
+            const role = await api.getCurrentUserRole();
+            if (role !== 'host' && role !== 'admin') {
+                navigate('/host/auth', { replace: true });
+                return;
+            }
+
+            const approvalStatus = await api.getHostApprovalStatus();
+            if (role === 'host' && approvalStatus && approvalStatus !== 'approved') {
+                setHostApprovalStatus(approvalStatus);
+                setLoading(false);
                 return;
             }
 
@@ -430,6 +445,10 @@ export const HostNewProperty = () => {
 
     if (loading) {
         return <div className={styles.page}><div className={styles.loading}>Loading property form...</div></div>;
+    }
+
+    if (hostApprovalStatus && hostApprovalStatus !== 'approved') {
+        return <HostApprovalStatusView status={hostApprovalStatus} />;
     }
 
     return (

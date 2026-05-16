@@ -1,41 +1,52 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './Header.module.css';
-import { Search, Globe, Menu, UserCircle, X } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Menu, UserCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
+import { authService } from '../services/auth';
 
 export const Header: React.FC = () => {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const [isSearchOpen, setIsSearchOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [currentUserName, setCurrentUserName] = useState<string | null>(null);
+    const [currentUserRole, setCurrentUserRole] = useState<'guest' | 'host' | 'admin' | null>(null);
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        const params = new URLSearchParams(searchParams);
-        if (searchTerm.trim()) {
-            params.set('q', searchTerm);
-        } else {
-            params.delete('q');
-        }
-        setIsSearchOpen(false);
-        setIsMenuOpen(false);
-        navigate(`/?${params.toString()}`);
-    };
+    useEffect(() => {
+        const loadUser = async () => {
+            const session = await authService.getSession();
+            if (!session) {
+                setCurrentUserName(null);
+                setCurrentUserRole(null);
+                return;
+            }
+
+            const summary = await api.getCurrentUserSummary();
+            const metadata = session.user.user_metadata ?? {};
+            const fallbackName = typeof metadata.full_name === 'string'
+                ? metadata.full_name
+                : typeof metadata.name === 'string'
+                    ? metadata.name
+                    : session.user.email ?? 'User';
+
+            setCurrentUserName(summary?.name ?? fallbackName);
+            setCurrentUserRole(summary?.role ?? 'guest');
+        };
+
+        loadUser();
+    }, []);
 
     const handleNavigate = (path: string) => {
         setIsMenuOpen(false);
         navigate(path);
     };
 
-    const clearSearch = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setSearchTerm('');
-        const params = new URLSearchParams(searchParams);
-        params.delete('q');
+    const handleSwitchToHosting = async () => {
         setIsMenuOpen(false);
-        navigate(`/?${params.toString()}`);
-    }
+        const path = await api.resolveHostEntryPath();
+        navigate(path);
+    };
+
+    const roleBadgeLabel = currentUserRole ? currentUserRole.toUpperCase() : '';
 
     return (
         <header className={styles.header}>
@@ -57,60 +68,29 @@ export const Header: React.FC = () => {
                 </a>
             </div>
 
-            {/* Search Bar - "Pill" */}
-            <div className={styles.searchContainer}>
-                {isSearchOpen ? (
-                    <form onSubmit={handleSearch} className={styles.searchExpanded} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '0 8px' }}>
-                        <input
-                            type="text"
-                            placeholder="Search destinations"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            autoFocus
-                            style={{
-                                border: 'none',
-                                outline: 'none',
-                                fontSize: '14px',
-                                flex: 1,
-                                fontWeight: 500,
-                                background: 'transparent'
-                            }}
-                        />
-                        <button type="submit" className={styles.searchIconContainer} style={{ width: '32px', height: '32px' }}>
-                            <Search size={14} strokeWidth={3} />
-                        </button>
-                        <button type="button" onClick={() => setIsSearchOpen(false)} style={{ marginLeft: '8px', padding: '4px' }}>
-                            <X size={16} />
-                        </button>
-                    </form>
-                ) : (
-                    <div className={styles.searchBar} onClick={() => setIsSearchOpen(true)}>
-                        <div className={styles.searchButton}>
-                            {searchTerm ? searchTerm : 'Anywhere'} {searchTerm && <button onClick={clearSearch} style={{ marginLeft: '4px', display: 'flex' }}><X size={12} /></button>}
-                        </div>
-                        <div className={styles.searchButton}>Any week</div>
-                        <div className={styles.searchButton} style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>Add guests</div>
-                        <div className={styles.searchIconContainer}>
-                            <Search size={14} strokeWidth={3} />
-                        </div>
-                    </div>
-                )}
-            </div>
-
             {/* User Menu */}
             <div className={styles.userMenu}>
-                <a href="/trips" className={styles.hostLink} onClick={(e) => { e.preventDefault(); navigate('/trips'); }}>
-                    Trips
-                </a>
-                <a href="/favorites" className={styles.hostLink} onClick={(e) => { e.preventDefault(); navigate('/favorites'); }}>
-                    Favorites
-                </a>
-                <button className={styles.hostLink} onClick={() => navigate('/host')}>
-                    Switch to hosting
-                </button>
-                <button className={styles.globeButton}>
-                    <Globe size={18} />
-                </button>
+                {!currentUserRole ? (
+                    <button className={styles.hostLink} onClick={() => navigate('/auth')}>
+                        Login
+                    </button>
+                ) : (
+                    <>
+                        <button className={styles.hostLink} onClick={() => navigate('/trips')}>
+                            Trips
+                        </button>
+                        <button className={styles.hostLink} onClick={() => navigate('/favorites')}>
+                            Favorites
+                        </button>
+                        <button className={styles.hostLink} onClick={handleSwitchToHosting}>
+                            Dashboard
+                        </button>
+                        <div className={styles.userBadge}>
+                            <span className={styles.userName}>{currentUserName ?? 'User'}</span>
+                            <span className={styles.roleBadge}>{roleBadgeLabel}</span>
+                        </div>
+                    </>
+                )}
                 <div className={styles.profileMenu}>
                     <Menu size={18} />
                     <div className={styles.avatar}>
@@ -138,14 +118,28 @@ export const Header: React.FC = () => {
                         onClick={() => setIsMenuOpen(false)}
                     />
                     <div className={styles.mobileMenuPanel} role="menu" aria-label="Mobile navigation">
-                        <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/trips')}>
-                            Trips
+                        {!currentUserRole ? (
+                            <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/auth')}>
+                                Login
+                            </button>
+                        ) : (
+                            <>
+                                <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/trips')}>
+                                    Trips
+                                </button>
+                                <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/favorites')}>
+                                    Favorites
+                                </button>
+                                <button type="button" className={styles.menuItem} onClick={handleSwitchToHosting}>
+                                    Dashboard
+                                </button>
+                            </>
+                        )}
+                        <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/host/flash-sales')}>
+                            Flash sales
                         </button>
-                        <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/favorites')}>
-                            Favorites
-                        </button>
-                        <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/host')}>
-                            Switch to hosting
+                        <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/host/host-approvals')}>
+                            Host approvals
                         </button>
                         <button type="button" className={styles.menuItem} onClick={() => handleNavigate('/')}>
                             Home

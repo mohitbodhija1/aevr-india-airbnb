@@ -27,3 +27,8 @@ npm run dev
 
 - The app still has a mock fallback path, so it remains usable before Supabase is fully connected.
 - Node 20.19+ is recommended for the current Vite version.
+
+## Docs
+
+- [Flash Sale Guide](./docs/flash-sale-guide.md)
+- [Roles and Admin Access Guide](./docs/roles-and-admin-access.md)
