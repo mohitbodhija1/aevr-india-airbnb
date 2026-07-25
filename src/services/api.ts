@@ -2086,6 +2086,54 @@ export const api = {
         }
     },
 
+    adminFetchApprovedHosts: async (): Promise<{ id: string; name: string; avatarUrl?: string }[]> => {
+        if (!supabase) {
+            return [];
+        }
+
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .eq('role', 'host')
+            .eq('host_approval_status', 'approved')
+            .order('full_name', { ascending: true });
+
+        if (error || !data) {
+            return [];
+        }
+
+        return (data as { id: string; full_name: string | null; avatar_url: string | null }[]).map((row) => ({
+            id: row.id,
+            name: row.full_name?.trim() || 'Unnamed Host',
+            avatarUrl: row.avatar_url ?? undefined,
+        }));
+    },
+
+    adminAssignListingHost: async (listingId: string, newHostId: string): Promise<void> => {
+        if (!supabase) {
+            throw new Error('Supabase is not configured');
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) {
+            throw new Error('You must be signed in as admin');
+        }
+
+        const role = await api.getCurrentUserRole();
+        if (role !== 'admin') {
+            throw new Error('Only admins can reassign listing ownership');
+        }
+
+        const { error } = await supabase
+            .from('listings')
+            .update({ host_id: newHostId })
+            .eq('id', listingId);
+
+        if (error) {
+            throw error;
+        }
+    },
+
     createAvailabilityBlock: async (
         input: { listingId: string; startDate: string; endDate: string; status: AvailabilityBlockStatus }
     ): Promise<AvailabilityBlock> => {
