@@ -645,10 +645,10 @@ const TOP_DESTINATIONS = [
         searchQuery: 'Rishikesh'
     },
     {
-        name: 'Gurgaon',
+        name: 'Goa',
         villasCount: 1,
-        image: 'https://bnwtqridnqbjzwqzkejj.supabase.co/storage/v1/object/public/listing-images/5db62c26-e08c-4c60-a306-89d7637f60cb/1781181109856-v4tdi0915r.jpeg',
-        searchQuery: 'Gurgaon'
+        image: '/goa_destination.png',
+        searchQuery: 'Goa'
     },
     {
         name: 'Coming Soon',
@@ -695,6 +695,7 @@ export const Home = () => {
     const guestFavoriteOnly = searchParams.get('favorites') === '1';
 
     const [listings, setListings] = useState<Listing[]>([]);
+    const [destinationCounts, setDestinationCounts] = useState<Record<string, number>>({});
     const [activeDrop, setActiveDrop] = useState<FlashSaleDrop | null>(null);
     const [activeDrops, setActiveDrops] = useState<FlashSaleDrop[]>([]);
     const [nowTs, setNowTs] = useState(Date.now());
@@ -720,6 +721,17 @@ export const Home = () => {
     useEffect(() => {
         const ticker = setInterval(() => setNowTs(Date.now()), 1000);
         return () => clearInterval(ticker);
+    }, []);
+
+    useEffect(() => {
+        const loadCounts = async () => {
+            const citiesToFetch = TOP_DESTINATIONS.filter(d => !d.isComingSoon).map(d => d.name);
+            if (citiesToFetch.length > 0) {
+                const counts = await api.fetchCityListingCounts(citiesToFetch);
+                setDestinationCounts(counts);
+            }
+        };
+        loadCounts();
     }, []);
 
     useEffect(() => {
@@ -1528,7 +1540,7 @@ export const Home = () => {
                                     <p className={styles.destinationCardSubtitle}>
                                         {dest.isComingSoon 
                                             ? 'Launching soon' 
-                                            : `${dest.villasCount} ${dest.villasCount === 1 ? 'Villa' : 'Villas'}`}
+                                            : `${destinationCounts[dest.name] ?? dest.villasCount} ${(destinationCounts[dest.name] ?? dest.villasCount) === 1 ? 'Villa' : 'Villas'}`}
                                     </p>
                                 </div>
                             </div>

@@ -1460,6 +1460,29 @@ const getFallbackListing = (
     };
 };
 
+const fetchSupabaseCityListingCounts = async (cities: string[]): Promise<Record<string, number>> => {
+    if (!supabase || cities.length === 0) return {};
+    
+    const results: Record<string, number> = {};
+    
+    for (const city of cities) {
+        const { count, error } = await supabase
+            .from('listings')
+            .select('*', { count: 'exact', head: true })
+            .eq('is_active', true)
+            .ilike('city', city);
+            
+        if (!error && count !== null) {
+            results[city] = count;
+        } else {
+            results[city] = 0;
+        }
+    }
+    
+    return results;
+};
+
+
 export const api = {
     fetchCategories: (): Promise<CategoriesResponse> => {
         return new Promise((resolve) => {
@@ -1484,6 +1507,16 @@ export const api = {
 
                         resolve([]);
                     });
+            }, DELAY_MS);
+        });
+    },
+
+    fetchCityListingCounts: (cities: string[]): Promise<Record<string, number>> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                fetchSupabaseCityListingCounts(cities)
+                    .then(resolve)
+                    .catch(() => resolve({}));
             }, DELAY_MS);
         });
     },
