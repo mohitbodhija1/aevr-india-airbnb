@@ -1033,9 +1033,10 @@ export const Home = () => {
                 </section>
             </main>
 
+            {/* Temporarily hidden bottom dashboard section: Why choose AEVR? & Villa Tour */}
+            {/*
             <section className={styles.bottomDashboardSection}>
                 <div className={styles.bottomDashboardContainer}>
-                    {/* Card 1: Why choose AEVR? */}
                     <div className={styles.dashboardCard}>
                         <h2 className={styles.dashboardCardTitle}>Why choose AEVR?</h2>
                         <div className={styles.compactFeaturesGrid}>
@@ -1069,9 +1070,9 @@ export const Home = () => {
                             </div>
                         </div>
                     </div>
-
                 </div>
             </section>
+            */}
 
             <div className={styles.contactFloatGroup}>
                 <a
