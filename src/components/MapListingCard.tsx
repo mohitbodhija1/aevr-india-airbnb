@@ -3,6 +3,7 @@ import { Star, MapPin, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Listing } from '../types';
 import styles from './MapListingCard.module.css';
+import { withImageTransform } from '../services/media';
 
 interface MapListingCardProps {
     listing: Listing;
@@ -39,7 +40,7 @@ export const MapListingCard: React.FC<MapListingCardProps> = ({
             >
                 {imageUrl && (
                     <img
-                        src={imageUrl}
+                        src={withImageTransform(imageUrl, { width: 400, quality: 70 })}
                         alt={listing.title}
                         className={styles.overlayImage}
                     />
@@ -90,7 +91,7 @@ export const MapListingCard: React.FC<MapListingCardProps> = ({
             <div className={styles.listImageWrap}>
                 {imageUrl && (
                     <img
-                        src={imageUrl}
+                        src={withImageTransform(imageUrl, { width: 400, quality: 70 })}
                         alt={listing.title}
                         className={styles.listImage}
                     />

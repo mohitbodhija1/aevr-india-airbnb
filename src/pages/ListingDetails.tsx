@@ -30,6 +30,7 @@ import { FuzzyMap } from '../components/FuzzyMap';
 import { hasValidCoords, extractCoordsFromGoogleMapsUrl } from '../services/mapUtils';
 import DiscountCountdown from '../components/DiscountCountdown';
 import ListingDiscountCountdown from '../components/ListingDiscountCountdown';
+import { getFallbackImage, withImageTransform } from '../services/media';
 
 
 const formatPrice = (amount: number, currency?: string) =>
@@ -825,7 +826,7 @@ Please let me know the next steps for confirming the booking.`;
                                 )
                             ) : (
                                 <img
-                                    src={item.url}
+                                    src={withImageTransform(item.url, { width: 1200, quality: 80 })}
                                     alt={`${listing.title} view ${idx + 1}`}
                                     className={styles.desktopSlideMedia}
                                     loading={idx === 0 ? 'eager' : 'lazy'}
@@ -873,7 +874,7 @@ Please let me know the next steps for confirming the booking.`;
                                     )
                                 ) : (
                                     <img
-                                        src={item.url}
+                                        src={withImageTransform(item.url, { width: 1200, quality: 80 })}
                                         alt={`${listing.title} view ${index + 1}`}
                                         className={styles.mobileSlideMedia}
                                         onError={renderImageFallback}

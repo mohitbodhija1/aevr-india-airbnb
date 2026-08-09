@@ -235,3 +235,27 @@ export const getImageUrlsFromMedia = (media: ListingMediaItem[]) =>
     media.filter((item) => item.kind === 'image').map((item) => item.url);
 
 export const getFallbackImage = () => FALLBACK_IMAGE;
+
+/**
+ * Rewrites a Supabase Storage "object/public" URL to the image-transform
+ * render endpoint so Supabase serves a resized, compressed version instead
+ * of the raw file.  Non-Supabase URLs are returned unchanged.
+ *
+ * Supabase transform docs:
+ * https://supabase.com/docs/guides/storage/serving/image-transformations
+ */
+export const withImageTransform = (
+    url: string,
+    opts: { width?: number; quality?: number; resize?: 'cover' | 'contain' | 'fill' } = {}
+): string => {
+    if (!url || !url.includes('/storage/v1/object/public/')) {
+        return url;
+    }
+    const { width = 600, quality = 70, resize = 'cover' } = opts;
+    const transformed = url.replace(
+        '/storage/v1/object/public/',
+        '/storage/v1/render/image/public/'
+    );
+    const sep = transformed.includes('?') ? '&' : '?';
+    return `${transformed}${sep}width=${width}&quality=${quality}&resize=${resize}`;
+};

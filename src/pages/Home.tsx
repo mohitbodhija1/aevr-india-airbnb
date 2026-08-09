@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
     Clock3,
@@ -27,16 +27,6 @@ import {
     MapPin,
     User,
     ChevronDown,
-    Play,
-    Pause,
-    Volume2,
-    VolumeX,
-    Leaf,
-    Check,
-    Maximize2,
-    MoreHorizontal,
-    UploadCloud,
-    Trash2,
     ArrowRight
 } from 'lucide-react';
 import styles from '../App.module.css'; // Reusing the grid styles from App module
@@ -44,8 +34,8 @@ import styles from '../App.module.css'; // Reusing the grid styles from App modu
 import { ListingCard } from '../components/ListingCard';
 import { SkeletonScreen } from '../components/SkeletonScreen';
 import { api } from '../services/api';
-import { getFallbackImage } from '../services/media';
-import type { FlashSaleDrop, Listing, ListingFilters, ListingSortOption, PresetVideo } from '../types';
+import { getFallbackImage, withImageTransform } from '../services/media';
+import type { FlashSaleDrop, Listing, ListingFilters, ListingSortOption } from '../types';
 
 const SORT_OPTIONS: Array<{ value: ListingSortOption; label: string }> = [
     { value: 'recommended', label: 'Recommended' },
@@ -99,529 +89,7 @@ const parseSortParam = (value: string | null): ListingSortOption => {
 };
 
 
-const PRESET_VIDEOS: PresetVideo[] = [
-    {
-        name: "Scenic Coastal Escape",
-        url: "/sample_tour_1.mp4",
-        thumb: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=240&auto=format&fit=crop",
-        duration: "0:15"
-    },
-    {
-        name: "Beautiful Ocean Joyride",
-        url: "/sample_tour_2.mp4",
-        thumb: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=240&auto=format&fit=crop",
-        duration: "0:15"
-    },
-    {
-        name: "Scenic Forest Trail (WebM)",
-        url: "/sample_tour_3.webm",
-        thumb: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=240&auto=format&fit=crop",
-        duration: "0:15"
-    }
-];
 
-const DB_NAME = 'aevr_video_db';
-const STORE_NAME = 'videos';
-const DB_VERSION = 3;
-
-const openDB = (): Promise<IDBDatabase> => {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        request.onupgradeneeded = () => {
-            const db = request.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME);
-            }
-        };
-        request.onsuccess = () => {
-            const db = request.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                console.warn(`Database opened, but store ${STORE_NAME} is missing. Re-opening with higher version.`);
-                db.close();
-                const req2 = indexedDB.open(DB_NAME, DB_VERSION + 1);
-                req2.onupgradeneeded = () => {
-                    const db2 = req2.result;
-                    db2.createObjectStore(STORE_NAME);
-                };
-                req2.onsuccess = () => resolve(req2.result);
-                req2.onerror = () => reject(req2.error);
-            } else {
-                resolve(db);
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
-};
-
-const saveVideoFile = async (key: string, file: File): Promise<void> => {
-    try {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            try {
-                const transaction = db.transaction(STORE_NAME, 'readwrite');
-                const store = transaction.objectStore(STORE_NAME);
-                const request = store.put(file, key);
-                request.onsuccess = () => resolve();
-                request.onerror = () => reject(request.error);
-            } catch (err) {
-                reject(err);
-            }
-        });
-    } catch (e) {
-        throw e;
-    }
-};
-
-const getVideoFile = async (key: string): Promise<File | null> => {
-    try {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            try {
-                const transaction = db.transaction(STORE_NAME, 'readonly');
-                const store = transaction.objectStore(STORE_NAME);
-                const request = store.get(key);
-                request.onsuccess = () => resolve(request.result || null);
-                request.onerror = () => reject(request.error);
-            } catch (err) {
-                reject(err);
-            }
-        });
-    } catch (e) {
-        throw e;
-    }
-};
-
-const deleteVideoFile = async (key: string): Promise<void> => {
-    try {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            try {
-                const transaction = db.transaction(STORE_NAME, 'readwrite');
-                const store = transaction.objectStore(STORE_NAME);
-                const request = store.delete(key);
-                request.onsuccess = () => resolve();
-                request.onerror = () => reject(request.error);
-            } catch (err) {
-                reject(err);
-            }
-        });
-    } catch (e) {
-        throw e;
-    }
-};
-
-const getStoredVideoList = (): PresetVideo[] => {
-    const saved = localStorage.getItem('aevr_tour_videos');
-    if (saved) {
-        try {
-            return JSON.parse(saved);
-        } catch (e) {
-            console.error("Error parsing saved videos from localStorage", e);
-        }
-    }
-    return PRESET_VIDEOS;
-};
-
-const VideoDashboardCard = () => {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [videoList, setVideoList] = useState<PresetVideo[]>(PRESET_VIDEOS);
-    const [videoSrc, setVideoSrc] = useState<string>(PRESET_VIDEOS[0].url);
-    const [activePreset, setActivePreset] = useState<number | null>(0);
-    const [isPlaying, setIsPlaying] = useState<boolean>(false);
-    const [isMuted, setIsMuted] = useState<boolean>(true);
-    const [videoError, setVideoError] = useState<string | null>(null);
-    const [currentTime, setCurrentTime] = useState<number>(0);
-    const [duration, setDuration] = useState<number>(0);
-    const [userRole, setUserRole] = useState<'guest' | 'host' | 'admin' | null>(null);
-    const [isUsingSupabase, setIsUsingSupabase] = useState<boolean>(false);
-    const [isUploading, setIsUploading] = useState<boolean>(false);
-
-    // Sync fallback list to localStorage (only if not using Supabase)
-    useEffect(() => {
-        if (!isUsingSupabase && videoList.length > 0) {
-            localStorage.setItem('aevr_tour_videos', JSON.stringify(videoList));
-        }
-    }, [videoList, isUsingSupabase]);
-
-    // Load custom/preset videos on mount
-    useEffect(() => {
-        const loadVideos = async () => {
-            try {
-                // 1. Try to fetch from Supabase
-                const dbVideos = await api.fetchTourVideos();
-                if (dbVideos && dbVideos.length > 0) {
-                    setVideoList(dbVideos);
-                    setVideoSrc(dbVideos[0].url);
-                    setIsUsingSupabase(true);
-                    return;
-                }
-            } catch (err) {
-                console.warn("Failed to load tour videos from Supabase, falling back to local storage:", err);
-            }
-
-            // 2. Fallback to IndexedDB / localStorage
-            setIsUsingSupabase(false);
-            const listToLoad = getStoredVideoList();
-            const loadedList = await Promise.all(
-                listToLoad.map(async (video) => {
-                    if (video.isLocal && video.id) {
-                        try {
-                            const file = await getVideoFile(video.id);
-                            if (file) {
-                                const objectUrl = URL.createObjectURL(file);
-                                return { ...video, url: objectUrl };
-                            }
-                        } catch (err) {
-                            console.error("Failed to load IndexedDB video file", err);
-                        }
-                        return null;
-                    }
-                    return video;
-                })
-            );
-            
-            const cleanList = loadedList.filter((v): v is PresetVideo => v !== null);
-            
-            if (cleanList.length > 0) {
-                setVideoList(cleanList);
-                setVideoSrc(cleanList[0].url);
-            } else {
-                setVideoList(PRESET_VIDEOS);
-                setVideoSrc(PRESET_VIDEOS[0].url);
-            }
-        };
-
-        const checkRole = async () => {
-            try {
-                const role = await api.getCurrentUserRole();
-                setUserRole(role);
-            } catch (err) {
-                console.error("Error fetching user role", err);
-            }
-        };
-
-        loadVideos();
-        checkRole();
-    }, []);
-
-    useEffect(() => {
-        setVideoError(null);
-        setCurrentTime(0);
-        setDuration(0);
-
-        if (videoRef.current) {
-            videoRef.current.load();
-            if (isPlaying) {
-                videoRef.current.play()
-                    .then(() => setIsPlaying(true))
-                    .catch((err) => {
-                        console.log("Play failed", err);
-                        setIsPlaying(false);
-                    });
-            }
-        }
-    }, [videoSrc]);
-
-    const handlePlayPause = () => {
-        if (!videoRef.current) return;
-        if (isPlaying) {
-            videoRef.current.pause();
-            setIsPlaying(false);
-        } else {
-            videoRef.current.play()
-                .then(() => setIsPlaying(true))
-                .catch(() => setVideoError("Could not play video source."));
-        }
-    };
-
-    const handleMuteUnmute = () => {
-        if (!videoRef.current) return;
-        videoRef.current.muted = !isMuted;
-        setIsMuted(!isMuted);
-    };
-
-    const handleTimeUpdate = () => {
-        if (!videoRef.current) return;
-        setCurrentTime(videoRef.current.currentTime);
-    };
-
-    const handleLoadedMetadata = () => {
-        if (!videoRef.current) return;
-        setDuration(videoRef.current.duration);
-    };
-
-    const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!videoRef.current || duration === 0) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const width = rect.width;
-        const percentage = clickX / width;
-        const newTime = percentage * duration;
-        videoRef.current.currentTime = newTime;
-        setCurrentTime(newTime);
-    };
-
-    const handlePresetClick = (index: number) => {
-        setActivePreset(index);
-        setVideoSrc(videoList[index].url);
-        setVideoError(null);
-    };
-
-    const handleRemoveVideo = async (index: number, e: React.MouseEvent) => {
-        e.stopPropagation();
-        const targetVideo = videoList[index];
-        if (!targetVideo) return;
-
-        try {
-            if (isUsingSupabase && targetVideo.id) {
-                await api.deleteTourVideo(targetVideo.id, targetVideo.url);
-            } else if (targetVideo.isLocal && targetVideo.id) {
-                await deleteVideoFile(targetVideo.id);
-            }
-        } catch (err) {
-            console.error("Failed to delete video:", err);
-            setVideoError("Failed to delete video from database/storage.");
-            return;
-        }
-
-        setVideoList(prev => {
-            const nextList = prev.filter((_, i) => i !== index);
-            if (activePreset === index) {
-                if (nextList.length > 0) {
-                    setActivePreset(0);
-                    setVideoSrc(nextList[0].url);
-                } else {
-                    setActivePreset(null);
-                    setVideoSrc('');
-                }
-            } else if (activePreset !== null && activePreset > index) {
-                setActivePreset(activePreset - 1);
-            }
-            return nextList;
-        });
-    };
-
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setIsUploading(true);
-        setVideoError(null);
-
-        try {
-            if (isUsingSupabase) {
-                // Upload to Supabase Storage & Database
-                const newVideo = await api.uploadTourVideo(file);
-                setVideoList(prev => {
-                    const nextList = [...prev, newVideo];
-                    setActivePreset(nextList.length - 1);
-                    return nextList;
-                });
-                setVideoSrc(newVideo.url);
-            } else {
-                // Local IndexedDB fallback
-                const objectUrl = URL.createObjectURL(file);
-                const displayTitle = file.name.length > 22 ? file.name.substring(0, 19) + "..." : file.name;
-                const id = 'video_' + Date.now();
-                
-                await saveVideoFile(id, file);
-
-                const newVideo: PresetVideo = {
-                    id,
-                    name: displayTitle,
-                    url: objectUrl,
-                    thumb: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=240&auto=format&fit=crop",
-                    duration: "Local File",
-                    isLocal: true
-                };
-
-                setVideoList(prev => {
-                    const nextList = [...prev, newVideo];
-                    setActivePreset(nextList.length - 1);
-                    return nextList;
-                });
-                setVideoSrc(objectUrl);
-            }
-        } catch (err) {
-            console.error("Video upload failed:", err);
-            setVideoError(err instanceof Error ? err.message : "Failed to load chosen video file.");
-        } finally {
-            setIsUploading(false);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-        }
-    };
-
-    const handleFullScreen = () => {
-        if (!videoRef.current) return;
-        if (videoRef.current.requestFullscreen) {
-            videoRef.current.requestFullscreen();
-        } else if ((videoRef.current as any).webkitRequestFullscreen) {
-            (videoRef.current as any).webkitRequestFullscreen();
-        } else if ((videoRef.current as any).msRequestFullscreen) {
-            (videoRef.current as any).msRequestFullscreen();
-        }
-    };
-
-    const formatTime = (time: number) => {
-        if (isNaN(time) || !isFinite(time)) return "0:00";
-        const mins = Math.floor(time / 60);
-        const secs = Math.floor(time % 60);
-        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-    };
-
-    const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-    return (
-        <div className={styles.videoDashboardCard}>
-            <div className={styles.videoLeftColumn}>
-                <div className={`${styles.videoPlayerContainer} ${userRole !== 'admin' ? styles.videoPlayerFullHeight : ''}`}>
-                    <video
-                        ref={videoRef}
-                        className={styles.customVideo}
-                        src={videoSrc}
-                        loop
-                        muted={isMuted}
-                        playsInline
-                        onTimeUpdate={handleTimeUpdate}
-                        onLoadedMetadata={handleLoadedMetadata}
-                        onError={() => setVideoError("Error loading video source. Make sure it is a valid format (e.g. MP4).")}
-                        onClick={handlePlayPause}
-                    />
-                    
-                    {!isPlaying && !videoError && (
-                        <button type="button" className={styles.videoPlayOverlayBtn} onClick={handlePlayPause} aria-label="Play video">
-                            <Play size={28} fill="currentColor" />
-                        </button>
-                    )}
-
-                    <div className={styles.videoControlsOverlay}>
-                        <div className={styles.videoControlsRow}>
-                            <button type="button" className={styles.videoControlBtn} onClick={handlePlayPause} aria-label={isPlaying ? "Pause" : "Play"}>
-                                {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
-                            </button>
-                            <button type="button" className={styles.videoControlBtn} onClick={handleMuteUnmute} aria-label={isMuted ? "Unmute" : "Mute"}>
-                                {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                            </button>
-                            <span className={styles.videoProgressTime}>
-                                {formatTime(currentTime)} / {formatTime(duration)}
-                            </span>
-                            
-                            <div className={styles.videoProgressBar} onClick={handleProgressClick}>
-                                <div className={styles.videoProgressFill} style={{ width: `${progressPercentage}%` }}>
-                                    <div className={styles.videoProgressThumb} />
-                                </div>
-                            </div>
-
-                            <button type="button" className={styles.videoControlBtn} onClick={handleFullScreen} aria-label="Fullscreen">
-                                <Maximize2 size={16} />
-                            </button>
-                            <button type="button" className={styles.videoControlBtn} aria-label="More options">
-                                <MoreHorizontal size={16} />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                {userRole === 'admin' && (
-                    <div className={styles.uploadCard}>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="video/*"
-                            style={{ display: 'none' }}
-                            onChange={handleFileUpload}
-                        />
-                        <div className={styles.uploadCardHeader}>
-                            <div className={styles.uploadIconWrapper}>
-                                <UploadCloud size={20} />
-                            </div>
-                            <div className={styles.uploadCardText}>
-                                <span className={styles.uploadCardTitle}>Upload your own tour video</span>
-                                <span className={styles.uploadCardSubtitle}>MP4, WebM up to 200MB</span>
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            className={styles.uploadCardButton}
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isUploading}
-                        >
-                            {isUploading ? 'Uploading...' : 'Upload Video'}
-                        </button>
-                    </div>
-                )}
-            </div>
-
-
-            <div className={styles.videoSourcePanel}>
-                <div className={styles.videoPanelHeader}>
-                    <Leaf className={styles.leafIcon} size={20} />
-                    <h2 className={styles.videoPanelTitle}>Aevr Villa Tour</h2>
-                    <p className={styles.videoPanelSubtitle}>Experience curated retreats through our travel guide gallery, or upload your own video to test.</p>
-                </div>
-
-                <div className={styles.presetSectionTitle}>Select Tour Video</div>
-                <div className={styles.presetGrid}>
-                    {videoList.map((preset, index) => (
-                        <div
-                            key={index}
-                            role="button"
-                            tabIndex={0}
-                            className={`${styles.presetItem} ${activePreset === index ? styles.presetItemActive : ''}`}
-                            onClick={() => handlePresetClick(index)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    handlePresetClick(index);
-                                }
-                            }}
-                        >
-                            <div className={styles.presetThumbWrapper}>
-                                <img src={preset.thumb} className={styles.presetThumb} alt={preset.name} />
-                                <div className={styles.presetPlayOverlay}>
-                                    <Play size={10} fill="currentColor" />
-                                </div>
-                            </div>
-                            <div className={styles.presetInfo}>
-                                <span className={styles.presetName}>{preset.name}</span>
-                                <div className={styles.presetDurationRow}>
-                                    <Clock3 size={11} className={styles.durationIcon} />
-                                    <span className={styles.presetDuration}>{preset.duration}</span>
-                                </div>
-                            </div>
-                            <div className={styles.presetRightActions}>
-                                {activePreset === index && (
-                                    <div className={styles.activeCheckCircle}>
-                                        <Check size={12} strokeWidth={3} />
-                                    </div>
-                                )}
-                                {userRole === 'admin' && (
-                                    <button
-                                        type="button"
-                                        className={styles.presetRemoveBtn}
-                                        onClick={(e) => handleRemoveVideo(index, e)}
-                                        aria-label={`Remove video ${preset.name}`}
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {videoError && (
-                    <div className={styles.videoErrorAlert} role="alert">
-                        {videoError}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
 
 const HERO_IMAGES = [
     '/coastal_calm_hero.png',
@@ -635,7 +103,7 @@ const TOP_DESTINATIONS = [
     {
         name: 'Udaipur',
         villasCount: 33,
-        image: 'https://bnwtqridnqbjzwqzkejj.supabase.co/storage/v1/object/public/listing-images/5db62c26-e08c-4c60-a306-89d7637f60cb/1779601571206-rzk4465nvj.jpeg',
+        image: 'https://bnwtqridnqbjzwqzkejj.supabase.co/storage/v1/render/image/public/listing-images/5db62c26-e08c-4c60-a306-89d7637f60cb/1779601571206-rzk4465nvj.jpeg?width=600&quality=70&resize=cover',
         searchQuery: 'Udaipur'
     },
     {
@@ -647,7 +115,7 @@ const TOP_DESTINATIONS = [
     {
         name: 'Gurgaon',
         villasCount: 1,
-        image: 'https://bnwtqridnqbjzwqzkejj.supabase.co/storage/v1/object/public/listing-images/5db62c26-e08c-4c60-a306-89d7637f60cb/1781181109856-v4tdi0915r.jpeg',
+        image: 'https://bnwtqridnqbjzwqzkejj.supabase.co/storage/v1/render/image/public/listing-images/5db62c26-e08c-4c60-a306-89d7637f60cb/1781181109856-v4tdi0915r.jpeg?width=600&quality=70&resize=cover',
         searchQuery: 'Gurgaon'
     },
     {
@@ -695,11 +163,36 @@ export const Home = () => {
     const guestFavoriteOnly = searchParams.get('favorites') === '1';
 
     const [listings, setListings] = useState<Listing[]>([]);
+    const [displayedListings, setDisplayedListings] = useState<Listing[]>([]);
+    const [showFilters, setShowFilters] = useState(false);
     const [activeDrop, setActiveDrop] = useState<FlashSaleDrop | null>(null);
     const [activeDrops, setActiveDrops] = useState<FlashSaleDrop[]>([]);
     const [nowTs, setNowTs] = useState(Date.now());
     const [loading, setLoading] = useState(true);
     const [listingError, setListingError] = useState<string | null>(null);
+
+    // Local draft state for the budget slider.
+    // Writes here immediately (for responsive visual feedback) and debounces
+    // committing to searchParams so fetchListings fires once after dragging stops.
+    const [localMinBudget, setLocalMinBudget] = useState(budgetMinValue);
+    const [localMaxBudget, setLocalMaxBudget] = useState(budgetMaxValue);
+
+    useEffect(() => {
+        if (!showFilters) {
+            setDisplayedListings(listings);
+        }
+    }, [listings, showFilters]);
+
+    // Keep local draft budget in sync when URL params change externally
+    // (e.g. quick chips, back button, direct URL navigation).
+    // Only sync when the filter modal is closed to avoid overwriting live drag.
+    useEffect(() => {
+        if (!showFilters) {
+            setLocalMinBudget(budgetMinValue);
+            setLocalMaxBudget(budgetMaxValue);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [budgetMinValue, budgetMaxValue]);
 
     const [heroSearchQuery, setHeroSearchQuery] = useState(searchParams.get('search') ?? '');
     const [heroGuests, setHeroGuests] = useState(searchParams.get('guests') ?? '');
@@ -811,15 +304,16 @@ export const Home = () => {
     const handleMinBudgetChange = (value: string) => {
         const valNum = Number(value);
         if (Number.isNaN(valNum)) return;
-        const nextMinBudget = Math.min(valNum, budgetMaxValue - BUDGET_STEP);
-        updateParams({ minPrice: nextMinBudget <= BUDGET_MIN ? null : nextMinBudget });
+        // Write to local state only; the debounce effect below commits to searchParams.
+        const nextMin = Math.min(valNum, localMaxBudget - BUDGET_STEP);
+        setLocalMinBudget(Math.max(BUDGET_MIN, nextMin));
     };
 
     const handleMaxBudgetChange = (value: string) => {
         const valNum = Number(value);
         if (Number.isNaN(valNum)) return;
-        const nextMaxBudget = Math.max(valNum, budgetMinValue + BUDGET_STEP);
-        updateParams({ maxPrice: nextMaxBudget >= BUDGET_MAX ? null : nextMaxBudget });
+        const nextMax = Math.max(valNum, localMinBudget + BUDGET_STEP);
+        setLocalMaxBudget(Math.min(BUDGET_MAX, nextMax));
     };
 
     const changeGuests = (delta: number) => {
@@ -837,7 +331,22 @@ export const Home = () => {
         updateParams({ baths: nextVal <= 0 ? null : nextVal });
     };
 
-    const isMinSliderOnTop = budgetMinValue > BUDGET_MAX * 0.5;
+    // Debounce: commit budget slider values to URL only after the user
+    // stops dragging for 400ms. This prevents fetchListings from firing
+    // on every pixel of slider movement.
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            updateParams({
+                minPrice: localMinBudget <= BUDGET_MIN ? null : localMinBudget,
+                maxPrice: localMaxBudget >= BUDGET_MAX ? null : localMaxBudget,
+            });
+        }, 400);
+        return () => clearTimeout(timer);
+    // updateParams is stable (defined outside effects, doesn't change)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [localMinBudget, localMaxBudget]);
+
+    const isMinSliderOnTop = localMinBudget > BUDGET_MAX * 0.5;
 
     useEffect(() => {
         const loadListings = async () => {
@@ -901,16 +410,13 @@ export const Home = () => {
             maximumFractionDigits: 0,
         }).format(value);
 
-    const budgetLabel = minPrice === undefined && maxPrice === undefined
+    // Show local draft values in the label/track for responsive visual feedback.
+    const budgetLabel = localMinBudget <= BUDGET_MIN && localMaxBudget >= BUDGET_MAX
         ? 'Any price'
-        : `${formatBudget(minPrice ?? BUDGET_MIN)} - ${maxPrice === undefined ? 'Any price' : formatBudget(maxPrice)}`;
-    const budgetMinProgress = `${((budgetMinValue - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100}%`;
-    const budgetMaxProgress = `${((budgetMaxValue - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100}%`;
+        : `${formatBudget(localMinBudget <= BUDGET_MIN ? BUDGET_MIN : localMinBudget)} - ${localMaxBudget >= BUDGET_MAX ? 'Any price' : formatBudget(localMaxBudget)}`;
+    const budgetMinProgress = `${((localMinBudget - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100}%`;
+    const budgetMaxProgress = `${((localMaxBudget - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100}%`;
 
-    useEffect(() => {
-        const id = window.setInterval(() => setNowTs(Date.now()), 1000);
-        return () => window.clearInterval(id);
-    }, []);
 
     const activeFiltersCount = [
         Boolean(categoryFilter),
@@ -924,7 +430,6 @@ export const Home = () => {
         guestFavoriteOnly,
     ].filter(Boolean).length;
 
-    const [showFilters, setShowFilters] = useState(false);
 
     useEffect(() => {
         const handleToggle = () => {
@@ -1154,7 +659,7 @@ export const Home = () => {
                                         <div key={drop.id} className={styles.flashSaleCard}>
                                             <img
                                                 className={styles.flashSaleImage}
-                                                src={drop.listing.images[0] ?? getFallbackImage()}
+                                                src={withImageTransform(drop.listing.images[0] ?? getFallbackImage(), { width: 600, quality: 70 })}
                                                 alt={drop.listing.title}
                                             />
                                             <div className={styles.flashSaleBody}>
@@ -1240,7 +745,7 @@ export const Home = () => {
                                             min={BUDGET_MIN}
                                             max={BUDGET_MAX}
                                             step={BUDGET_STEP}
-                                            value={budgetMinValue}
+                                            value={localMinBudget}
                                             onChange={(e) => handleMinBudgetChange(e.target.value)}
                                             style={{ zIndex: isMinSliderOnTop ? 3 : 4 }}
                                         />
@@ -1251,7 +756,7 @@ export const Home = () => {
                                             min={BUDGET_MIN}
                                             max={BUDGET_MAX}
                                             step={BUDGET_STEP}
-                                            value={budgetMaxValue}
+                                            value={localMaxBudget}
                                             onChange={(e) => handleMaxBudgetChange(e.target.value)}
                                             style={{ zIndex: isMinSliderOnTop ? 4 : 3 }}
                                         />
@@ -1267,7 +772,7 @@ export const Home = () => {
                                                 type="number"
                                                 min={BUDGET_MIN}
                                                 max={BUDGET_MAX}
-                                                value={minPrice ?? BUDGET_MIN}
+                                                value={localMinBudget}
                                                 onChange={(e) => handleMinBudgetChange(e.target.value)}
                                             />
                                         </div>
@@ -1281,7 +786,7 @@ export const Home = () => {
                                                 type="number"
                                                 min={BUDGET_MIN}
                                                 max={BUDGET_MAX}
-                                                value={maxPrice ?? BUDGET_MAX}
+                                                value={localMaxBudget}
                                                 onChange={(e) => handleMaxBudgetChange(e.target.value)}
                                             />
                                         </div>
@@ -1289,10 +794,10 @@ export const Home = () => {
                                 </div>
 
                                 <div className={styles.quickChips}>
-                                    <button type="button" className={styles.quickChip} onClick={() => updateParams({ minPrice: null, maxPrice: 5000 })}>
+                                    <button type="button" className={styles.quickChip} onClick={() => { setLocalMinBudget(BUDGET_MIN); setLocalMaxBudget(5000); }}>
                                         Under ₹5k
                                     </button>
-                                    <button type="button" className={styles.quickChip} onClick={() => updateParams({ minPrice: null, maxPrice: 10000 })}>
+                                    <button type="button" className={styles.quickChip} onClick={() => { setLocalMinBudget(BUDGET_MIN); setLocalMaxBudget(10000); }}>
                                         Under ₹10k
                                     </button>
                                 </div>
@@ -1451,13 +956,13 @@ export const Home = () => {
                         <h2>Listings could not load</h2>
                         <p>{listingError}</p>
                     </div>
-                ) : listings.length > 0 ? (
+                ) : displayedListings.length > 0 ? (
                     <>
                         <div className={styles.sectionHeaderRow}>
                             <h2 className={styles.sectionHeading}>{luxurySection ? 'Aevr Luxe stays' : 'Featured stays'}</h2>
                         </div>
                         <div className={styles.grid}>
-                            {listings.map((listing, index) => (
+                            {displayedListings.map((listing, index) => (
                                 <ListingCard key={listing.id} listing={listing} activeFlashSale={activeDrops} cardIndex={index} />
                             ))}
                         </div>
@@ -1574,8 +1079,6 @@ export const Home = () => {
                         </div>
                     </div>
 
-                    {/* Card 2: Interactive Video Player Card */}
-                    <VideoDashboardCard />
                 </div>
             </section>
 

@@ -4,7 +4,7 @@ import type { Listing, FlashSaleDrop } from '../types';
 import { Heart, ChevronLeft, ChevronRight, BedDouble, Users, Waves, Mountain, Compass, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { favoritesService } from '../services/favorites';
-import { getFallbackImage } from '../services/media';
+import { getFallbackImage, withImageTransform } from '../services/media';
 
 const getFormattedLocation = (city: string, country: string) => {
     const cleanCity = city.trim();
@@ -259,7 +259,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing, cardIndex, ac
                 <div className={styles.imageContainer}>
                     <div className={`${styles.shimmer} ${imageLoaded ? styles.shimmerHidden : ''}`} />
                     <img
-                        src={coverImage}
+                        src={withImageTransform(coverImage, { width: 600, quality: 70 })}
                         alt={listing.title}
                         className={styles.image}
                         loading={cardIndex !== undefined && cardIndex < 4 ? 'eager' : 'lazy'}

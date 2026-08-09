@@ -2265,7 +2265,7 @@ export const api = {
         const { error: uploadError } = await supabase.storage
             .from('listing-images')
             .upload(filePath, file, {
-                cacheControl: '3600',
+                cacheControl: '31536000, immutable',
                 upsert: false,
                 contentType: file.type || undefined,
             });
