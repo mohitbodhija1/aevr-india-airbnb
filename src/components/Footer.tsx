@@ -1,28 +1,24 @@
-import React, { useState } from 'react';
+import React from 'react';
 import styles from './Footer.module.css';
-import { Globe, Instagram, MessageCircle, Facebook } from 'lucide-react';
+import { Globe, Instagram, Facebook } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/aevrindia?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==';
 const WHATSAPP_URL = 'https://wa.me/918890807482';
 
+const WhatsAppIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414-.074-.124-.272-.198-.57-.347z"/>
+        <path d="M12 2C6.477 2 2 6.477 2 12c0 2.148.679 4.14 1.838 5.772L2 22l4.372-1.802A9.95 9.95 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.952 7.952 0 01-4.095-1.127l-.293-.174-2.593 1.068 1.085-2.529-.191-.307A7.955 7.955 0 014 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8z"/>
+    </svg>
+);
+
 export const Footer: React.FC = () => {
-    const [email, setEmail] = useState('');
-    const [subscribed, setSubscribed] = useState(false);
-
-    const handleSubscribe = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (email.trim()) {
-            setSubscribed(true);
-            setEmail('');
-        }
-    };
-
     return (
         <footer className={styles.footer}>
             <div className={styles.container}>
-                {/* Row 1: Brand & Newsletter */}
-                <div className={styles.topSection}>
+                {/* Main 5-Column Grid */}
+                <div className={styles.mainGrid}>
                     <div className={styles.brandCol}>
                         <div className={styles.logoWrapper}>
                             <svg viewBox="0 0 100 100" className={styles.logoIcon}>
@@ -41,37 +37,6 @@ export const Footer: React.FC = () => {
                         </p>
                     </div>
 
-                    <div className={styles.newsletterCol}>
-                        <h4 className={styles.colTitle}>Newsletter</h4>
-                        {!subscribed ? (
-                            <form className={styles.subscribeForm} onSubmit={handleSubscribe}>
-                                <input
-                                    type="email"
-                                    placeholder="Enter email address"
-                                    className={styles.subscribeInput}
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    required
-                                />
-                                <button type="submit" className={styles.subscribeBtn}>
-                                    Submit
-                                </button>
-                            </form>
-                        ) : (
-                            <div className={styles.subscribeSuccess}>
-                                Thank you for subscribing to our updates!
-                            </div>
-                        )}
-                        <p className={styles.newsletterText}>
-                            Stay connected with exclusive luxury. Get updates on new villa openings, private member drops, and curated travel guides.
-                        </p>
-                    </div>
-                </div>
-
-                <div className={styles.divider} />
-
-                {/* Row 2: 4-Column Links Grid */}
-                <div className={styles.middleSection}>
                     <div className={styles.column}>
                         <h4 className={styles.linksTitle}>Quick Links</h4>
                         <ul className={styles.colList}>
@@ -117,7 +82,7 @@ export const Footer: React.FC = () => {
                         </ul>
                         <div className={styles.socials}>
                             <a href={WHATSAPP_URL} target="_blank" rel="noreferrer" className={styles.socialIcon} aria-label="WhatsApp">
-                                <MessageCircle size={18} />
+                                <WhatsAppIcon size={18} />
                             </a>
                             <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" className={styles.socialIcon} aria-label="Instagram">
                                 <Instagram size={18} />

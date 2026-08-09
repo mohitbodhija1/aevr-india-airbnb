@@ -159,6 +159,7 @@ const fallbackRoomTypes = (listing?: Listing): RoomType[] => {
     ];
 };
 
+
 const renderImageFallback = (event: SyntheticEvent<HTMLImageElement>) => {
     if (event.currentTarget.src !== getFallbackImage()) {
         event.currentTarget.src = getFallbackImage();
@@ -340,38 +341,6 @@ export const ListingDetails = () => {
         };
     };
 
-    useEffect(() => {
-        if (!isOnSale || !activeDrop) return;
-
-        const updateTimer = () => {
-            const now = Date.now();
-            const end = new Date(activeDrop.endAt).getTime();
-            const diff = end - now;
-
-            if (diff <= 0) {
-                setTimeLeftStr('Flash sale ended');
-                return;
-            }
-
-            const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-            const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-            const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
-
-            let str = '';
-            if (days > 0) {
-                str += `${days} day${days > 1 ? 's' : ''} `;
-            }
-            if (hours > 0 || days > 0) {
-                str += `${hours} hour${hours > 1 ? 's' : ''} `;
-            }
-            str += `${minutes} min${minutes > 1 ? 's' : ''}`;
-            setTimeLeftStr(str);
-        };
-
-        updateTimer();
-        const interval = setInterval(updateTimer, 60000);
-        return () => clearInterval(interval);
-    }, [isOnSale, activeDrop]);
 
     const roomTypes = useMemo(() => fallbackRoomTypes(listing), [listing]);
     const selectedRoomType = useMemo(

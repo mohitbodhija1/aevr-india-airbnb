@@ -8,10 +8,10 @@ import { api } from '../services/api';
 import { hasSupabaseConfig } from '../services/supabase';
 import { SkeletonScreen } from '../components/SkeletonScreen';
 
-// Initialize Supabase directly to avoid import errors from services
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Initialize Supabase safely
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 type Mode = 'sign-in' | 'sign-up';
 
@@ -36,6 +36,11 @@ export const HostAuth = () => {
     // Google Auth Handler for Hosts
     const handleGoogleLogin = async () => {
         setMessage(null);
+        if (!supabase) {
+            setMessage('Google sign-in requires Supabase configuration.');
+            setMessageType('error');
+            return;
+        }
         try {
             localStorage.setItem('aevr.oauth_role', 'host');
             const { error } = await supabase.auth.signInWithOAuth({

@@ -404,9 +404,6 @@ const mapListing = (row: SupabaseListingRow): Listing => {
         ...directAmenities.filter((a) => !seen.has(a.toLowerCase())),
     ];
 
-    if (import.meta.env.DEV) {
-        console.log('[mapListing] joined amenities:', joinedAmenities, '| direct amenity_labels:', directAmenities, '| merged:', amenities);
-    }
     const roomTypes = normalizeRoomTypes(row.room_types);
     const localExperiences = normalizeExperiences(row.local_experiences);
     const displayHostName = row.host_name?.trim() || host?.full_name?.trim() || 'Host';
@@ -638,47 +635,100 @@ const fetchActiveFlashDrops = async (nowIso: string): Promise<FlashSaleDrop[]> =
         return [];
     }
 
-    let { data, error } = await supabase
-        .from('flash_sale_drops')
-        .select(FLASH_SALE_SELECT)
-        .eq('is_active', true)
-        .lte('start_at', nowIso)
-        .gt('end_at', nowIso)
-        .order('start_at', { ascending: false });
-
-    if (isMissingHostNameColumnError(error)) {
-        const fallbackResult = await supabase
+    // Fetch flash-sale drops and discounted listings IN PARALLEL
+    const [flashSaleResult, discountedResult] = await Promise.allSettled([
+        supabase
             .from('flash_sale_drops')
-            .select(FLASH_SALE_SELECT_WITHOUT_HOST_NAME)
+            .select(FLASH_SALE_SELECT)
             .eq('is_active', true)
             .lte('start_at', nowIso)
             .gt('end_at', nowIso)
-            .order('start_at', { ascending: false });
-
-        data = fallbackResult.data as typeof data;
-        error = fallbackResult.error;
-    }
-
-    if (isMissingAmenityLabelsColumnError(error)) {
-        const fallbackResult = await supabase
-            .from('flash_sale_drops')
-            .select(FLASH_SALE_SELECT_WITHOUT_AMENITY_LABELS)
+            .order('start_at', { ascending: false }),
+        supabase
+            .from('listings')
+            .select(LISTING_SELECT)
             .eq('is_active', true)
-            .lte('start_at', nowIso)
-            .gt('end_at', nowIso)
-            .order('start_at', { ascending: false });
+            .gt('discount_end_time', nowIso),
+    ]);
 
-        data = fallbackResult.data as typeof data;
-        error = fallbackResult.error;
+    let drops: FlashSaleDrop[] = [];
+
+    if (flashSaleResult.status === 'fulfilled') {
+        let { data, error } = flashSaleResult.value;
+
+        if (isMissingHostNameColumnError(error)) {
+            const fallbackResult = await supabase
+                .from('flash_sale_drops')
+                .select(FLASH_SALE_SELECT_WITHOUT_HOST_NAME)
+                .eq('is_active', true)
+                .lte('start_at', nowIso)
+                .gt('end_at', nowIso)
+                .order('start_at', { ascending: false });
+
+            data = fallbackResult.data as typeof data;
+            error = fallbackResult.error;
+        }
+
+        if (isMissingAmenityLabelsColumnError(error)) {
+            const fallbackResult = await supabase
+                .from('flash_sale_drops')
+                .select(FLASH_SALE_SELECT_WITHOUT_AMENITY_LABELS)
+                .eq('is_active', true)
+                .lte('start_at', nowIso)
+                .gt('end_at', nowIso)
+                .order('start_at', { ascending: false });
+
+            data = fallbackResult.data as typeof data;
+            error = fallbackResult.error;
+        }
+
+        if (!error && data) {
+            drops = (data as unknown as SupabaseFlashSaleRow[])
+                .map(mapFlashSale)
+                .filter((drop): drop is FlashSaleDrop => drop !== null);
+        }
     }
 
-    if (error || !data) {
-        return [];
+    // Merge in discounted listings fetched in parallel
+    try {
+        if (discountedResult.status === 'fulfilled') {
+            const { data: discountedListings, error: listingsErr } = discountedResult.value;
+            if (!listingsErr && discountedListings) {
+                const existingListingIds = new Set(drops.map((d) => d.listingId));
+                const extraListings = (discountedListings as unknown as SupabaseListingRow[]).map(mapListing);
+                for (const l of extraListings) {
+                    if (
+                        !existingListingIds.has(l.id) &&
+                        l.discountedPrice &&
+                        l.discountEndTime &&
+                        l.discountedPrice < (l.originalPrice ?? l.price)
+                    ) {
+                        const origPrice = l.originalPrice ?? l.price;
+                        const discountPercent = Math.round(((origPrice - l.discountedPrice) / origPrice) * 100);
+                        drops.push({
+                            id: `listing-drop-${l.id}`,
+                            listingId: l.id,
+                            listing: l,
+                            saleType: 'manual_price',
+                            saleValue: l.discountedPrice,
+                            startAt: new Date().toISOString(),
+                            endAt: l.discountEndTime,
+                            isActive: true,
+                            createdBy: l.hostId || '',
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                            salePrice: l.discountedPrice,
+                            discountPercent,
+                        });
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('Error merging discounted listings for flash sale drops:', err);
     }
 
-    return (data as unknown as SupabaseFlashSaleRow[])
-        .map(mapFlashSale)
-        .filter((drop): drop is FlashSaleDrop => drop !== null);
+    return drops;
 };
 
 const fetchActiveFlashDropForListing = async (listingId: string, nowIso: string): Promise<FlashSaleDrop | null> => {

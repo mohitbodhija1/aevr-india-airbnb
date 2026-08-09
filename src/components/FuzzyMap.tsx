@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, ExternalLink } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import styles from './FuzzyMap.module.css';
 import { fuzzCoordinates } from '../services/mapUtils';
 
@@ -20,9 +20,6 @@ export const FuzzyMap = ({ lat, lng, listingId, city }: FuzzyMapProps) => {
     const embedUrl =
         `https://maps.google.com/maps?q=${fLat},${fLng}&z=15&output=embed&hl=en`;
 
-    // External link (opens Google Maps in new tab)
-    const externalUrl =
-        `https://www.google.com/maps/search/?api=1&query=${fLat},${fLng}`;
 
     return (
         <div className={styles.wrapper}>

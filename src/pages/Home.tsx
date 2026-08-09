@@ -165,7 +165,6 @@ export const Home = () => {
     const [listings, setListings] = useState<Listing[]>([]);
     const [displayedListings, setDisplayedListings] = useState<Listing[]>([]);
     const [showFilters, setShowFilters] = useState(false);
-    const [activeDrop, setActiveDrop] = useState<FlashSaleDrop | null>(null);
     const [activeDrops, setActiveDrops] = useState<FlashSaleDrop[]>([]);
     const [nowTs, setNowTs] = useState(Date.now());
     const [loading, setLoading] = useState(true);
@@ -388,10 +387,8 @@ export const Home = () => {
                 if (flashSaleResult.status === 'fulfilled') {
                     const drops = flashSaleResult.value;
                     setActiveDrops(drops);
-                    setActiveDrop(drops.length > 0 ? drops[0] : null);
                 } else {
                     setActiveDrops([]);
-                    setActiveDrop(null);
                     if (import.meta.env.DEV) {
                         console.error(flashSaleResult.reason);
                     }
@@ -448,13 +445,7 @@ export const Home = () => {
         }
     }, [searchParams, setSearchParams]);
 
-    const remainingMs = activeDrop ? new Date(activeDrop.endAt).getTime() - nowTs : 0;
-    const hasActiveDrop = Boolean(activeDrop && remainingMs > 0);
-    const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
-    const hours = Math.floor(remainingSeconds / 3600);
-    const minutes = Math.floor((remainingSeconds % 3600) / 60);
-    const seconds = remainingSeconds % 60;
-    const countdown = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
 
     return (
         <>
@@ -627,7 +618,7 @@ export const Home = () => {
                     </p>
                 </div>
 
-            <main className={`${styles.homeMainContainer} ${luxurySection ? styles.homeModeLuxe : styles.homeModeAevr}`}>
+            <main id="explore" className={`${styles.homeMainContainer} ${luxurySection ? styles.homeModeLuxe : styles.homeModeAevr}`}>
                 {activeDrops.filter((drop) => new Date(drop.endAt).getTime() > nowTs).length > 0 && (
                     <section className={styles.flashSaleSection}>
                         <div className={styles.flashSaleSectionHeader}>

@@ -16,6 +16,8 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminGuestVerification } from './pages/AdminGuestVerification';
 import { AdminProperties } from './pages/AdminProperties';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { AboutUs } from './pages/AboutUs';
+import { Terms } from './pages/Terms';
 import HelpCenter from './pages/HelpCenter';
 import { MapExplore } from './pages/MapExplore';
 import './styles/global.css';
@@ -36,8 +38,10 @@ function App() {
           <Route path="bookings" element={<Trips />} />
           <Route path="map" element={<MapExplore />} />
           <Route path="privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="about" element={<AboutUs />} />
+          <Route path="terms" element={<Terms />} />
+          <Route path="help" element={<HelpCenter />} />
         </Route>
-        <Route path="/help" element={<HelpCenter />} />
         <Route path="/host" element={<HostLayout />}>
           <Route index element={<HostDashboard />} />
           <Route path="new" element={<HostNewProperty />} />

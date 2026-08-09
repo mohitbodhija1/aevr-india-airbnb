@@ -218,9 +218,9 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing, cardIndex, ac
         : null;
 
     const saleEndAt = activeDrop?.endAt ?? listing.discountEndTime;
-    const { text: countdownText, isExpired } = saleEndAt
+    const { isExpired } = saleEndAt
         ? formatRemainingTime(saleEndAt, nowTs)
-        : { text: '', isExpired: true };
+        : { isExpired: true };
 
     const isOnSale = Boolean(activeDiscountPrice && activeDiscountPrice < origPrice && !isExpired);
     const currentPrice = isOnSale && activeDiscountPrice ? activeDiscountPrice : listing.price;
