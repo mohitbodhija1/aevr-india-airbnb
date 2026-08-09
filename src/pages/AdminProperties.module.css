@@ -1,3 +1,4 @@
+/* ── Page & Panel ─────────────────────────────────────────────────── */
 .page {
     padding-top: calc(var(--header-height) + 24px);
     padding-left: var(--container-padding);
@@ -38,6 +39,8 @@
     background: var(--color-primary);
     color: #fff;
     box-shadow: var(--shadow-sm);
+    text-decoration: none;
+    white-space: nowrap;
 }
 
 .metaRow {
@@ -56,6 +59,7 @@
     border-radius: 10px;
 }
 
+/* ── Grid & Card ─────────────────────────────────────────────────── */
 .grid {
     margin-top: 16px;
     display: grid;
@@ -68,6 +72,11 @@
     border-radius: 14px;
     overflow: hidden;
     background: #fff;
+    transition: box-shadow 0.2s;
+}
+
+.card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.09);
 }
 
 .image {
@@ -77,7 +86,7 @@
 }
 
 .body {
-    padding: 12px;
+    padding: 14px;
 }
 
 .top {
@@ -89,22 +98,16 @@
 
 .top h3 {
     margin: 0;
+    font-size: 1rem;
 }
 
 .body p {
     margin: 6px 0 0;
     color: var(--color-gray-300);
+    font-size: 0.88rem;
 }
 
-.hostLine {
-    font-size: 0.92rem;
-}
-
-.price {
-    color: var(--text-primary) !important;
-    font-weight: var(--font-weight-semibold);
-}
-
+/* ── Badges ──────────────────────────────────────────────────────── */
 .badgeActive,
 .badgeDelisted {
     display: inline-flex;
@@ -113,6 +116,8 @@
     border-radius: 999px;
     font-size: 0.78rem;
     font-weight: var(--font-weight-semibold);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .badgeActive {
@@ -125,27 +130,352 @@
     color: #b91c1c;
 }
 
+/* ── Host info row (current owner strip) ─────────────────────────── */
+.hostInfoRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.03);
+}
+
+.hostInfoLeft {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.hostAvatarSm {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.hostAvatarSmFallback {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff5a5f, #c13584);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.hostLineName {
+    font-size: 0.88rem;
+    font-weight: var(--font-weight-semibold);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Assign toggle button ─────────────────────────────────────────── */
+.assignToggleBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 30px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: var(--font-weight-semibold);
+    background: #fff;
+    border: 1.5px solid var(--color-primary, #ff5a5f);
+    color: var(--color-primary, #ff5a5f);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.18s, color 0.18s;
+}
+
+.assignToggleBtn:hover {
+    background: var(--color-primary, #ff5a5f);
+    color: #fff;
+}
+
+/* ── Assign Owner Panel ───────────────────────────────────────────── */
+.assignPanel {
+    margin-top: 10px;
+    border: 1.5px solid var(--color-primary, #ff5a5f);
+    border-radius: 12px;
+    padding: 14px;
+    background: #fff9f9;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.assignPanelHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.assignPanelTitle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-primary, #ff5a5f);
+}
+
+.assignCloseBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--color-gray-100);
+    background: #fff;
+    color: var(--color-gray-300);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.assignCloseBtn:hover {
+    background: var(--color-gray-100);
+}
+
+.assignSubtitle {
+    font-size: 0.82rem;
+    color: var(--color-gray-300);
+    margin: 0 0 10px;
+    line-height: 1.5;
+}
+
+.assignSubtitle strong {
+    color: var(--text-primary);
+}
+
+/* Current owner strip */
+.currentOwnerRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 0.83rem;
+}
+
+.currentOwnerLabel {
+    color: var(--color-gray-300);
+}
+
+.currentOwnerValue {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+/* Search */
+.searchWrap {
+    position: relative;
+    margin-bottom: 8px;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-gray-300);
+    pointer-events: none;
+}
+
+.searchInput {
+    width: 100%;
+    height: 34px;
+    border: 1px solid var(--color-gray-100);
+    border-radius: 8px;
+    padding: 0 10px 0 30px;
+    font-size: 0.85rem;
+    outline: none;
+    background: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+}
+
+.searchInput:focus {
+    border-color: var(--color-primary, #ff5a5f);
+}
+
+/* Host list */
+.hostList {
+    max-height: 180px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.noHosts {
+    font-size: 0.83rem;
+    color: var(--color-gray-300);
+    text-align: center;
+    padding: 10px 0;
+}
+
+.hostOption {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: #fff;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.hostOption:hover {
+    background: rgba(255, 90, 95, 0.05);
+    border-color: rgba(255, 90, 95, 0.2);
+}
+
+.hostOptionSelected {
+    background: rgba(255, 90, 95, 0.08) !important;
+    border-color: var(--color-primary, #ff5a5f) !important;
+}
+
+.hostAvatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.hostAvatarFallback {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff5a5f, #c13584);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.hostName {
+    font-size: 0.88rem;
+    font-weight: var(--font-weight-semibold);
+    flex: 1;
+}
+
+.hostCheck {
+    color: var(--color-primary, #ff5a5f);
+    flex-shrink: 0;
+}
+
+/* Feedback messages */
+.assignError {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(254, 242, 242, 0.95);
+    border: 1px solid rgba(185, 28, 28, 0.25);
+    color: #b91c1c;
+    font-size: 0.82rem;
+}
+
+.assignSuccess {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(240, 253, 244, 0.95);
+    border: 1px solid rgba(21, 128, 61, 0.25);
+    color: #15803d;
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.assignActions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.assignBtn {
+    height: 34px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: var(--font-weight-semibold);
+    background: var(--color-primary, #ff5a5f);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.assignBtn:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+}
+
+/* ── Price & actions ─────────────────────────────────────────────── */
+.hostLine {
+    font-size: 0.92rem;
+}
+
+.price {
+    color: var(--text-primary) !important;
+    font-weight: var(--font-weight-semibold);
+    margin-top: 10px !important;
+}
+
 .actions {
     margin-top: 12px;
     display: flex;
-    gap: 10px;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .secondaryButton,
 .dangerButton {
-    height: 36px;
+    height: 34px;
     padding: 0 12px;
     border-radius: 999px;
+    font-size: 0.85rem;
     font-weight: var(--font-weight-semibold);
     border: 1px solid var(--color-gray-100);
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
 }
 
 .secondaryButton {
     background: #fff;
     color: var(--text-primary);
+}
+
+.secondaryButton:hover {
+    background: var(--color-gray-100);
 }
 
 .dangerButton {
@@ -154,11 +484,16 @@
     border-color: rgba(185, 28, 28, 0.2);
 }
 
+.dangerButton:hover:not(:disabled) {
+    background: rgba(185, 28, 28, 0.06);
+}
+
 .dangerButton:disabled {
     opacity: 0.62;
     cursor: not-allowed;
 }
 
+/* ── Empty state ─────────────────────────────────────────────────── */
 .emptyState {
     margin-top: 18px;
     border: 1px dashed var(--color-gray-100);
@@ -167,6 +502,7 @@
     text-align: center;
 }
 
+/* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 900px) {
     .grid {
         grid-template-columns: 1fr;
